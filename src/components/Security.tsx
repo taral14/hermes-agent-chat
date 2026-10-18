@@ -1,4 +1,5 @@
 import { Fingerprint, KeyRound, Loader2, Pencil, ShieldCheck, Trash2, Usb, X } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import { useEffect, useState } from 'react'
 import * as passkey from '../passkey.ts'
 import type { PasskeyInfo, Security as SecurityState } from '../passkey.ts'
@@ -83,6 +84,7 @@ export function Security({ onClose }: { onClose: () => void }) {
   }
 
   return (
+    createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Безпека" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grip" />
@@ -169,6 +171,8 @@ export function Security({ onClose }: { onClose: () => void }) {
         )}
         {msg && <div className="notif-msg">{msg}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
+    )
   )
 }

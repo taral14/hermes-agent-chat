@@ -1,4 +1,5 @@
 import { Bell, BellOff, CalendarClock, Loader2, MessageSquareText, Share, ShieldAlert, SquarePlus, X } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import { useEffect, useState, type ReactNode } from 'react'
 import * as push from '../push.ts'
 import type { PushSettings } from '../shared.ts'
@@ -65,6 +66,7 @@ export function Notifications({ onClose }: { onClose: () => void }) {
   }
 
   return (
+    createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Сповіщення" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grip" />
@@ -202,6 +204,8 @@ export function Notifications({ onClose }: { onClose: () => void }) {
         )}
         {msg && <div className="notif-msg">{msg}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
+    )
   )
 }

@@ -55,6 +55,18 @@ export default function App() {
   const [newModel, setNewModel] = useState<ModelChoice>(null)
   const [newMode, setNewMode] = useState<ChatMode>('auto')
   const [sidebar, setSidebar] = useState(() => !isNarrow())
+  const [narrow, setNarrow] = useState(isNarrow)
+  useEffect(() => {
+    const mq = matchMedia('(max-width: 768px)')
+    const on = () => {
+      setNarrow(mq.matches)
+      setSidebar(!mq.matches)
+    }
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  // Свайп від лівого краю відкриває меню, свайп уліво — закриває (як у ChatGPT).
+  const swipe = useRef<{ x: number; y: number } | null>(null)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [notif, setNotif] = useState(false)
@@ -339,9 +351,9 @@ export default function App() {
   const header = (
       <header className="topbar">
         <div className="topbar-left">
-          {!sidebar && (
+          {(!sidebar || narrow) && (
             <>
-              <button type="button" className="icon-btn" aria-label="Показати панель" title="Показати панель" onClick={() => setSidebar(true)}>
+              <button type="button" className="icon-btn m-menu-btn" aria-label="Показати панель" title="Показати панель" onClick={() => setSidebar(true)}>
                 <span className="only-wide">
                   <PanelLeftOpen size={20} />
                 </span>
@@ -356,7 +368,7 @@ export default function App() {
           )}
           <ModelPicker value={current ? current.model : newModel} options={models} onChange={setModel} />
         </div>
-        <button type="button" className="icon-btn only-narrow" aria-label="Новий чат" onClick={newChat}>
+        <button type="button" className="icon-btn only-narrow m-menu-btn" aria-label="Новий чат" onClick={newChat}>
           <SquarePen size={19} />
         </button>
       </header>
@@ -366,11 +378,28 @@ export default function App() {
   if (auth === 'out') return <Login onDone={onLoggedIn} />
 
   return (
-    <div className={`app ${sidebar ? 'sidebar-open' : ''}`}>
-      {sidebar && (
+    <div
+      className={`app ${sidebar ? 'sidebar-open' : ''} ${narrow ? 'is-narrow' : ''}`}
+      onTouchStart={(e) => {
+        const t = e.touches[0]!
+        swipe.current = narrow && (sidebar || t.clientX < 32) ? { x: t.clientX, y: t.clientY } : null
+      }}
+      onTouchEnd={(e) => {
+        const s0 = swipe.current
+        swipe.current = null
+        if (!s0) return
+        const t = e.changedTouches[0]!
+        const dx = t.clientX - s0.x
+        if (Math.abs(t.clientY - s0.y) > 60) return
+        if (!sidebar && dx > 50) setSidebar(true)
+        if (sidebar && dx < -60) setSidebar(false)
+      }}
+    >
+      {(sidebar || narrow) && (
         <>
-          <div className="scrim" onClick={() => setSidebar(false)} />
+          {sidebar && <div className="scrim" onClick={() => setSidebar(false)} />}
           <Sidebar
+            narrow={narrow}
             chats={chats}
             currentId={currentId}
             username={username}
@@ -421,7 +450,7 @@ export default function App() {
         }}
       >
         {jobsRoute ? (
-          <JobsView route={jobsRoute} go={goJobs} sidebarOpen={sidebar} openSidebar={() => setSidebar(true)} flash={flash} />
+          <JobsView route={jobsRoute} go={goJobs} sidebarOpen={sidebar && !narrow} openSidebar={() => setSidebar(true)} flash={flash} />
         ) : (
           <>
         {header}

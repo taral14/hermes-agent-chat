@@ -1709,22 +1709,7 @@ button.act-line:hover:not(:disabled) {
   .only-wide {
     display: none !important;
   }
-  .sidebar {
-    position: absolute;
-    z-index: 30;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: min(300px, 85vw);
-    box-shadow: 0 0 24px rgba(0, 0, 0, 0.2);
-  }
-  .scrim {
-    display: block;
-    position: absolute;
-    inset: 0;
-    z-index: 25;
-    background: var(--scrim);
-  }
+
   .chat-more {
     display: inline-flex;
   }
@@ -3158,4 +3143,313 @@ button.act-line:hover:not(:disabled) {
     width: min(300px, calc(100vw - 40px));
     left: -40px;
   }
+}
+
+
+/* ---------- Телефон: меню й шрифти як у застосунку ChatGPT ---------- */
+
+:root {
+  --m-side: #f9f9f9;
+  --m-btn: #ececec;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --m-side: #000000;
+    --m-btn: #262626;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    font-size: 17px;
+  }
+
+  .app.is-narrow {
+    position: relative;
+    background: var(--m-side);
+  }
+
+  /* Меню лежить під чатом; чат від'їжджає вправо із заокругленням. */
+  .is-narrow .sidebar {
+    position: absolute;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 84vw;
+    padding: calc(10px + env(safe-area-inset-top)) 0 0;
+    background: var(--m-side);
+  }
+
+  .is-narrow .main {
+    z-index: 2;
+    transition: transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1), border-radius 0.34s;
+  }
+
+  .is-narrow.sidebar-open .main {
+    transform: translateX(84vw);
+    border-radius: 34px;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px var(--border), 0 0 40px rgba(0, 0, 0, 0.18);
+  }
+
+  .is-narrow .scrim {
+    display: block;
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    bottom: 0;
+    left: 84vw;
+    right: 0;
+    background: rgba(0, 0, 0, 0.12);
+  }
+
+  .m-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 16px 14px 22px;
+  }
+
+  .m-title {
+    font-size: 27px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .m-round {
+    width: 52px;
+    height: 52px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--m-btn);
+    color: var(--text);
+    flex-shrink: 0;
+  }
+
+  .m-round:active,
+  .m-new:active {
+    transform: scale(0.95);
+  }
+
+  .is-narrow .sidebar-search {
+    margin: 0 16px 10px;
+    height: 48px;
+    padding: 0 14px;
+    border-radius: 16px;
+    background: var(--m-btn);
+  }
+
+  .is-narrow .sidebar-search input {
+    font-size: 17px;
+  }
+
+  .is-narrow .chat-list {
+    margin: 0;
+    padding: 0 10px 120px;
+  }
+
+  .is-narrow .nav-block {
+    margin-bottom: 14px;
+  }
+
+  .is-narrow .nav-row {
+    height: 54px;
+    padding: 0 12px;
+    gap: 18px;
+    font-size: 18px;
+    border-radius: 14px;
+  }
+
+  .is-narrow .nav-icon {
+    width: 28px;
+    color: var(--text);
+  }
+
+  .is-narrow .chat-group {
+    margin-bottom: 18px;
+  }
+
+  .is-narrow .chat-group-title {
+    padding: 10px 12px 6px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .is-narrow .chat-item {
+    border-radius: 14px;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .is-narrow .chat-item:hover {
+    background: transparent;
+  }
+
+  .is-narrow .chat-item.is-active {
+    background: var(--m-btn);
+  }
+
+  .is-narrow .chat-link {
+    height: 52px;
+    padding: 0 12px;
+    font-size: 18px;
+  }
+
+  .is-narrow .chat-link:active {
+    opacity: 0.6;
+  }
+
+  .is-narrow .chat-empty {
+    font-size: 16px;
+    padding: 16px 12px;
+  }
+
+  .m-foot {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 18px max(18px, env(safe-area-inset-bottom));
+    background: linear-gradient(to bottom, transparent, var(--m-side) 45%);
+    pointer-events: none;
+  }
+
+  .m-foot > * {
+    pointer-events: auto;
+  }
+
+  .m-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    height: 56px;
+    padding: 0 26px 0 22px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 18px;
+    font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    transition: transform 0.12s;
+  }
+
+  /* Шапка чату: круглі кнопки, більший шрифт */
+  .topbar {
+    height: 60px;
+    padding: 0 12px;
+  }
+
+  .m-menu-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 999px;
+    background: var(--m-btn);
+    color: var(--text);
+  }
+
+  .model-btn {
+    font-size: 18px;
+  }
+
+  .model-sub {
+    font-size: 16px;
+  }
+
+  /* Текст розмови */
+  .md {
+    font-size: 17px;
+    line-height: 1.6;
+  }
+
+  .bubble {
+    font-size: 17px;
+    padding: 11px 18px;
+  }
+
+  .composer textarea {
+    font-size: 17px;
+  }
+
+  .activity-head {
+    font-size: 16px;
+  }
+
+  .act-row {
+    font-size: 15px;
+  }
+
+  .welcome-title {
+    font-size: 28px;
+  }
+
+  .suggestion {
+    font-size: 15px;
+  }
+}
+
+/* Нижні шторки дій (довге натискання на чат, налаштування) */
+.action-sheet {
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
+}
+
+.action-title {
+  font-size: 15px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 4px 16px 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.action-note {
+  font-size: 15px;
+  color: var(--text-2);
+  text-align: center;
+  padding: 0 16px 10px;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: 56px;
+  padding: 0 16px;
+  border-radius: 16px;
+  font-size: 18px;
+  text-align: left;
+}
+
+.action-row:active,
+.action-row:hover {
+  background: var(--hover);
+}
+
+.action-row.danger {
+  color: var(--danger);
+}
+
+.settings-user {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 16px 14px;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.avatar.big {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
 }
