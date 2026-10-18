@@ -1,8 +1,35 @@
 {
   "name": "chat",
   "private": true,
-  "description": "Open WebUI на chat.example.com: веб-чат із Hermes Agent через його OpenAI-сумісний API-сервер (127.0.0.1:8642). Роутер запускає ./start.sh на своєму PORT.",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Веб-чат із Hermes Agent на chat.example.com (React + Node + SQLite).",
   "scripts": {
-    "start": "exec ./start.sh"
+    "dev": "node --disable-warning=ExperimentalWarning server/index.ts",
+    "build": "tsc -b && vite build",
+    "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.ts",
+    "lint": "oxlint"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "highlight.js": "^11.12.0",
+    "lucide-react": "^1.59.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.88.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.4"
   }
 }
