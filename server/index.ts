@@ -39,6 +39,13 @@ import {
   publicChat,
   publicMessage,
   updateChat,
+  createLoginSession,
+  deleteOtherLoginSessions,
+  deleteLoginSession,
+  getLoginSession,
+  getSetting,
+  listLoginSessions,
+  touchLoginSession,
 } from './db.ts'
 import {
   HermesError,
@@ -117,22 +124,34 @@ const SECRET = readFileSync(SECRET_FILE, 'utf8').trim()
 
 const sign = (payload: string) => createHmac('sha256', SECRET).update(payload).digest('base64url')
 
-function sessionCookie(): string {
-  const exp = Date.now() + SESSION_DAYS * 86400_000
-  // Пароль входить у підпис: зміна пароля в config.yaml розлогінює всі пристрої.
-  const payload = `${exp}`
-  return `${payload}.${sign(payload + '|' + loadConfig().password)}`
+/**
+ * Cookie входу: <id сесії>.<підпис>. Сесія живе в базі, тож вихід її справді відкликає.
+ * Пароль входить у підпис: зміна пароля в config.yaml розлогінює всі пристрої.
+ */
+const cookieMac = (id: string) => sign(`${id}|${loadConfig().password}`)
+
+function newSession(req: IncomingMessage): string {
+  const id = randomBytes(24).toString('base64url')
+  createLoginSession(id, Date.now() + SESSION_DAYS * 86400_000, String(req.headers['user-agent'] ?? '').slice(0, 200), clientIp(req))
+  return `${id}.${cookieMac(id)}`
 }
 
-function authed(req: IncomingMessage): boolean {
+/** id сесії з cookie, якщо вона дійсна. */
+function sessionId(req: IncomingMessage): string | null {
   const raw = req.headers.cookie?.match(/(?:^|;\s*)chat_session=([^;]+)/)?.[1]
-  if (!raw) return false
-  const [exp, mac] = raw.split('.')
-  if (!exp || !mac || Number(exp) < Date.now()) return false
-  const expected = Buffer.from(sign(exp + '|' + loadConfig().password))
+  if (!raw) return null
+  const [id, mac] = raw.split('.')
+  if (!id || !mac) return null
+  const expected = Buffer.from(cookieMac(id))
   const got = Buffer.from(mac)
-  return got.length === expected.length && timingSafeEqual(got, expected)
+  if (got.length !== expected.length || !timingSafeEqual(got, expected)) return null
+  const s = getLoginSession(id)
+  if (!s || s.expiresAt < Date.now()) return null
+  if (Date.now() - s.lastSeen > 5 * 60_000) touchLoginSession(id, clientIp(req))
+  return id
 }
+
+const authed = (req: IncomingMessage) => sessionId(req) !== null
 
 function same(a: string, b: string) {
   const x = createHmac('sha256', SECRET).update(a).digest()
@@ -142,10 +161,26 @@ function same(a: string, b: string) {
 
 function loginCookie(req: IncomingMessage) {
   const secure = req.headers['x-forwarded-proto'] === 'https' || Boolean(req.headers['cf-connecting-ip'])
-  return `chat_session=${sessionCookie()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure ? '; Secure' : ''}`
+  return `chat_session=${newSession(req)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure ? '; Secure' : ''}`
 }
 
 const loginFails = new Map<string, { n: number; until: number }>()
+
+/**
+ * Загальний ліміт невдалих входів з усіх адрес разом, збережений у базі: перебір з багатьох IP
+ * чи через перезапуски сервера не допоможе. 20 помилок за 15 хв — вхід за паролем стоїть 15 хв.
+ */
+const GLOBAL_FAILS = 20
+const GLOBAL_WINDOW = 15 * 60_000
+function globalLocked(): boolean {
+  const g = JSON.parse(getSetting('login_fails') ?? '{}') as { start?: number; n?: number }
+  return (g.n ?? 0) >= GLOBAL_FAILS && Date.now() - (g.start ?? 0) < GLOBAL_WINDOW
+}
+function globalFail() {
+  const g = JSON.parse(getSetting('login_fails') ?? '{}') as { start?: number; n?: number }
+  const fresh = !g.start || Date.now() - g.start > GLOBAL_WINDOW
+  setSetting('login_fails', JSON.stringify(fresh ? { start: Date.now(), n: 1 } : { start: g.start, n: (g.n ?? 0) + 1 }))
+}
 const clientIp = (req: IncomingMessage) =>
   String(req.headers['cf-connecting-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0]!.trim()
 
@@ -178,10 +213,65 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
 
 async function readJson<T>(req: IncomingMessage): Promise<T> {
   const buf = await readBody(req, 1024 * 1024)
+  // Лише справжній JSON: звичайна HTML-форма з чужої сторінки не може поставити цей тип без дозволу CORS.
+  if (buf.length && !/^application\/json\b/i.test(String(req.headers['content-type'] ?? ''))) {
+    throw new HttpError(415, 'Потрібен Content-Type: application/json')
+  }
   try {
     return (buf.length ? JSON.parse(buf.toString('utf8')) : {}) as T
   } catch {
     throw new HttpError(400, 'Некоректний JSON')
+  }
+}
+
+/**
+ * Захист від підробки запитів (CSRF). Сусідні сайти на *.example.com браузер вважає «тим самим сайтом»
+ * і шле їм нашу cookie, тому SameSite=Lax тут не рятує. Змінювати щось можна лише зі сторінки самого чату.
+ */
+function sameOrigin(req: IncomingMessage): boolean {
+  const site = req.headers['sec-fetch-site']
+  if (site && site !== 'same-origin' && site !== 'none') return false
+  const origin = req.headers.origin
+  if (!origin) return true // не браузер (curl, роутер): cookie сам не підставить
+  try {
+    return new URL(origin).host === req.headers.host
+  } catch {
+    return false
+  }
+}
+
+/** Заголовки для сторінки й статики: без чужих скриптів, без вбудовування у фрейм. */
+const PAGE_HEADERS: Record<string, string> = {
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' blob:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "worker-src 'self'",
+    "manifest-src 'self'",
+    "frame-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; '),
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'same-origin',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+}
+
+/** Пуші йдуть лише на сервери браузерів: сервер не має стукати на довільні адреси (SSRF). */
+const PUSH_HOSTS = [/^web\.push\.apple\.com$/, /^fcm\.googleapis\.com$/, /^android\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /\.notify\.windows\.com$/, /\.push\.apple\.com$/]
+function pushHostAllowed(endpoint: string): boolean {
+  try {
+    const u = new URL(endpoint)
+    return u.protocol === 'https:' && !u.port && PUSH_HOSTS.some((re) => re.test(u.hostname))
+  } catch {
+    return false
   }
 }
 
@@ -413,12 +503,14 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     const ip = clientIp(req)
     const f = loginFails.get(ip)
     if (f && f.until > Date.now()) throw new HttpError(429, 'Забагато спроб. Спробуй за хвилину.')
+    if (globalLocked()) throw new HttpError(429, 'Забагато невдалих спроб. Вхід за паролем призупинено на 15 хвилин.')
     const { username, password } = await readJson<{ username?: string; password?: string }>(req)
     const cfg = loadConfig()
     if (!passwordLoginAllowed() && !cfg.allowPassword) throw new HttpError(403, 'Вхід за паролем вимкнено. Увійди з ключем.')
     if (!same(String(username ?? '').trim(), cfg.username) || !same(String(password ?? ''), cfg.password)) {
       const n = (f?.n ?? 0) + 1
       loginFails.set(ip, { n, until: n >= 5 ? Date.now() + 60_000 : 0 })
+      globalFail()
       throw new HttpError(401, 'Неправильний логін або пароль')
     }
     loginFails.delete(ip)
@@ -456,6 +548,8 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     throw new HttpError(400, `Ключ не підійшов: ${(err as Error).message}`)
   }
   if (path === '/api/logout' && method === 'POST') {
+    const sid = sessionId(req)
+    if (sid) deleteLoginSession(sid)
     return send(res, 200, { ok: true }, { 'Set-Cookie': 'chat_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' })
   }
   // Пінг для роутера: тримає сервер живим, поки Hermes працює (див. keepAlive нижче).
@@ -478,7 +572,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
       settings?: Partial<PushSettings>
     }>(req)
     const endpoint = b.subscription?.endpoint ?? b.endpoint ?? ''
-    if (!endpoint.startsWith('https://')) throw new HttpError(400, 'Немає підписки')
+    if (!pushHostAllowed(endpoint)) throw new HttpError(400, 'Немає підписки')
     const action = path.slice('/api/push/'.length)
     const clean = (x?: Partial<PushSettings>): Partial<PushSettings> =>
       Object.fromEntries(Object.entries(x ?? {}).filter(([k, v]) => k in DEFAULT_PUSH && typeof v === 'boolean'))
@@ -513,7 +607,12 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   if (path.startsWith('/api/auth/')) {
     try {
       const pub = (k: PasskeyRow) => ({ id: k.id, name: k.name, kind: k.kind, backedUp: k.backedUp, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt })
-      const security = () => ({ passkeys: listPasskeys().map(pub), passwordLogin: passwordLoginAllowed() })
+      const sid = sessionId(req)
+      const security = () => ({
+        passkeys: listPasskeys().map(pub),
+        passwordLogin: passwordLoginAllowed(),
+        sessions: listLoginSessions().map((x) => ({ id: x.id.slice(0, 8), createdAt: x.createdAt, lastSeen: x.lastSeen, ua: x.ua, ip: x.ip, current: x.id === sid })),
+      })
       if (path === '/api/auth/security' && method === 'GET') return send(res, 200, security())
       if (path === '/api/auth/passkeys/options' && method === 'POST') {
         const b = await readJson<{ kind?: string }>(req)
@@ -535,6 +634,17 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
         deletePasskey(k[1]!)
         // Без жодного ключа «лише ключі» не має сенсу: повертаємо вхід за паролем, щоб не замкнутись.
         if (!listPasskeys().length) setSetting('password_login', 'on')
+        return send(res, 200, security())
+      }
+      // Вийти на всіх інших пристроях: лишається тільки поточна сесія.
+      if (path === '/api/auth/sessions/revoke-others' && method === 'POST') {
+        if (sid) deleteOtherLoginSessions(sid)
+        return send(res, 200, security())
+      }
+      const sx = path.match(/^\/api\/auth\/sessions\/([\w-]{8})$/)
+      if (sx && method === 'DELETE') {
+        const target = listLoginSessions().find((x) => x.id.startsWith(sx[1]!) && x.id !== sid)
+        if (target) deleteLoginSession(target.id)
         return send(res, 200, security())
       }
       if (path === '/api/auth/password-login' && method === 'POST') {
@@ -859,11 +969,12 @@ if (DEV) {
       res.writeHead(200, {
         'Content-Type': EXT_MIME[extname(file)] ?? 'application/octet-stream',
         'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
+        ...PAGE_HEADERS,
       })
       res.end(await readFile(file))
       return
     }
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' })
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...PAGE_HEADERS })
     res.end(index)
   }
 }
@@ -873,6 +984,10 @@ const server = createServer(async (req, res) => {
   const dl = /^\/dl\/([\w-]{20,})(?:\/|$)/.exec(url.pathname)
   if (dl && (req.method === 'GET' || req.method === 'HEAD')) return serveDownloadLink(req, res, dl[1]!)
   if (!url.pathname.startsWith('/api/')) return handler(req, res)
+  const method = req.method ?? 'GET'
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && !sameOrigin(req)) {
+    return send(res, 403, { error: 'Запит з іншого сайту відхилено' })
+  }
   try {
     await api(req, res, url)
   } catch (err) {

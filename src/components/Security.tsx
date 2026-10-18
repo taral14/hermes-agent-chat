@@ -1,8 +1,8 @@
-import { Fingerprint, KeyRound, Loader2, Pencil, ShieldCheck, Trash2, Usb, X } from 'lucide-react'
+import { Fingerprint, KeyRound, Laptop, LogOut, Loader2, Pencil, ShieldCheck, Smartphone, Trash2, Usb, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { useEffect, useState } from 'react'
 import * as passkey from '../passkey.ts'
-import type { PasskeyInfo, Security as SecurityState } from '../passkey.ts'
+import type { PasskeyInfo, Security as SecurityState, SessionInfo } from '../passkey.ts'
 import { relative } from '../schedule.ts'
 
 function KeyRow({ k, onChange, onError }: { k: PasskeyInfo; onChange: (s: SecurityState) => void; onError: (m: string) => void }) {
@@ -52,6 +52,34 @@ function KeyRow({ k, onChange, onError }: { k: PasskeyInfo; onChange: (s: Securi
             <Trash2 size={16} />
           </button>
         </>
+      )}
+    </div>
+  )
+}
+
+/** «iPhone · Safari» з User-Agent. */
+function deviceLabel(ua: string): { name: string; phone: boolean } {
+  const device = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Macintosh/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : 'Пристрій'
+  const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox|FxiOS/.test(ua) ? 'Firefox' : /Chrome|CriOS/.test(ua) ? 'Chrome' : /Safari/.test(ua) ? 'Safari' : ''
+  return { name: browser ? `${device} · ${browser}` : device, phone: /iPhone|Android/.test(ua) }
+}
+
+function SessionRow({ s, onChange, onError }: { s: SessionInfo; onChange: (s: SecurityState) => void; onError: (m: string) => void }) {
+  const { name, phone } = deviceLabel(s.ua)
+  const Icon = phone ? Smartphone : Laptop
+  return (
+    <div className="key-row">
+      <span className="key-icon">
+        <Icon size={18} />
+      </span>
+      <span className="key-text">
+        <span className="key-name">{name}</span>
+        <span className="key-meta">{s.current ? 'Цей пристрій' : `активність ${relative(s.lastSeen)}`}{s.ip ? ` · ${s.ip}` : ''}</span>
+      </span>
+      {!s.current && (
+        <button type="button" className="icon-btn round danger-icon" aria-label="Вийти на цьому пристрої" onClick={() => passkey.revokeSession(s.id).then(onChange).catch((err: Error) => onError(err.message))}>
+          <LogOut size={16} />
+        </button>
       )}
     </div>
   )
@@ -166,6 +194,30 @@ export function Security({ onClose }: { onClose: () => void }) {
             </label>
             {!state.passwordLogin && (
               <p className="notif-foot">Якщо загубиш усі ключі: додай рядок allow_password: true у chat/config.yaml на Mac mini.</p>
+            )}
+
+            <div className="sec-label">Де виконано вхід</div>
+            <div className="key-list">
+              {state.sessions.map((s) => (
+                <SessionRow key={s.id} s={s} onChange={setState} onError={setMsg} />
+              ))}
+            </div>
+            {state.sessions.some((s) => !s.current) && (
+              <button
+                type="button"
+                className="sec-revoke"
+                disabled={busy === 'revoke'}
+                onClick={() => {
+                  setBusy('revoke')
+                  passkey
+                    .revokeOtherSessions()
+                    .then(setState)
+                    .catch((e: Error) => setMsg(e.message))
+                    .finally(() => setBusy(''))
+                }}
+              >
+                Вийти на всіх інших пристроях
+              </button>
             )}
           </>
         )}

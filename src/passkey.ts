@@ -8,7 +8,8 @@ import {
 } from '@simplewebauthn/browser'
 
 export type PasskeyInfo = { id: string; name: string; kind: 'device' | 'security-key'; backedUp: boolean; createdAt: number; lastUsedAt: number | null }
-export type Security = { passkeys: PasskeyInfo[]; passwordLogin: boolean }
+export type SessionInfo = { id: string; createdAt: number; lastSeen: number; ua: string; ip: string; current: boolean }
+export type Security = { passkeys: PasskeyInfo[]; passwordLogin: boolean; sessions: SessionInfo[] }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'same-origin' })
@@ -84,4 +85,6 @@ export async function register(kind: 'device' | 'security-key'): Promise<Securit
 
 export const rename = (id: string, name: string) => call<Security>('PATCH', `/api/auth/passkeys/${id}`, { name })
 export const remove = (id: string) => call<Security>('DELETE', `/api/auth/passkeys/${id}`)
+export const revokeSession = (id: string) => call<Security>('DELETE', `/api/auth/sessions/${id}`)
+export const revokeOtherSessions = () => post<Security>('/api/auth/sessions/revoke-others', {})
 export const setPasswordLogin = (enabled: boolean) => post<Security>('/api/auth/password-login', { enabled })

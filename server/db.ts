@@ -82,6 +82,7 @@ for (const sql of [
   `ALTER TABLE uploads ADD COLUMN ref INTEGER NOT NULL DEFAULT 0`,
   `CREATE TABLE IF NOT EXISTS download_links (token TEXT PRIMARY KEY, upload_id TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS lists (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, expires_at INTEGER NOT NULL, ua TEXT NOT NULL DEFAULT '', ip TEXT NOT NULL DEFAULT '')`,
 ]) {
   try {
     db.exec(sql)
@@ -421,6 +422,47 @@ export function getSetting(key: string): string | null {
 
 export function setSetting(key: string, value: string) {
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+}
+
+// ---------- Сесії входу ----------
+// Кожен вхід — рядок у базі: вихід видаляє його, тож украдена cookie після виходу вже не працює.
+
+export type SessionRow = { id: string; createdAt: number; lastSeen: number; expiresAt: number; ua: string; ip: string }
+
+const sessionRow = (r: Record<string, unknown>): SessionRow => ({
+  id: str(r.id),
+  createdAt: Number(r.created_at),
+  lastSeen: Number(r.last_seen),
+  expiresAt: Number(r.expires_at),
+  ua: str(r.ua),
+  ip: str(r.ip),
+})
+
+export function createLoginSession(id: string, expiresAt: number, ua: string, ip: string) {
+  const now = Date.now()
+  db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(now)
+  db.prepare('INSERT INTO sessions (id, created_at, last_seen, expires_at, ua, ip) VALUES (?, ?, ?, ?, ?, ?)').run(id, now, now, expiresAt, ua, ip)
+}
+
+export function getLoginSession(id: string): SessionRow | null {
+  const r = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id)
+  return r ? sessionRow(r) : null
+}
+
+export function touchLoginSession(id: string, ip: string) {
+  db.prepare('UPDATE sessions SET last_seen = ?, ip = ? WHERE id = ?').run(Date.now(), ip, id)
+}
+
+export function listLoginSessions(): SessionRow[] {
+  return db.prepare('SELECT * FROM sessions WHERE expires_at > ? ORDER BY last_seen DESC').all(Date.now()).map(sessionRow)
+}
+
+export function deleteLoginSession(id: string) {
+  db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
+}
+
+export function deleteOtherLoginSessions(keep: string) {
+  db.prepare('DELETE FROM sessions WHERE id != ?').run(keep)
 }
 
 /** Файли, на які ще посилаються повідомлення. */

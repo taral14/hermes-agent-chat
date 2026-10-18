@@ -1,6 +1,6 @@
 // Файли, які Hermes надсилає в чат: тег MEDIA:<шлях> (як у Telegram) або окремий рядок із шляхом до файлу.
 import { randomBytes } from 'node:crypto'
-import { constants, copyFileSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
+import { constants, copyFileSync, existsSync, mkdirSync, realpathSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import type { Attachment } from '../src/shared.ts'
@@ -98,11 +98,42 @@ export const CHAT_INSTRUCTIONS = [
 
 const HOME = homedir()
 /** Секрети не віддаємо, навіть якщо модель про них згадала. */
-const DENY = [/\/\.ssh\//, /\/\.gnupg\//, /\/\.hermes\/\.env$/, /\/\.env(\.|$)/, /\/Library\/Keychains\//, /\/\.aws\//, /\/\.config\/gh\//, /id_[a-z0-9]+$/, /\.pem$/, /\/config\.yaml$/]
+// Файли із секретами, які Hermes ніколи не прикріпить, навіть якщо його про це попросить чужа сторінка.
+// Прапорець i: диск macOS не розрізняє регістр, тож /.SSH/ — те саме, що /.ssh/.
+const DENY = [
+  /\/\.ssh\//i,
+  /\/\.gnupg\//i,
+  /\/\.aws\//i,
+  /\/\.config\/gh\//i,
+  /\/\.cloudflared\//i,
+  /\/\.docker\/config\.json$/i,
+  /\/\.kube\//i,
+  /\/\.(netrc|npmrc|pypirc|git-credentials)$/i,
+  /\/\.env(\.|$)/i,
+  /\/\.hermes\/(\.env|\.api_server_key|auth\.json|google_(client_secret|token)\.json|config\.yaml|pairing\/|platforms\/)/i,
+  /\/\.codex\/(auth\.json|config\.toml)/i,
+  /\/\.claude(\.json|\/\.credentials)/i,
+  /\/chat\/data\/(\.session-secret|\.vapid\.json|chat\.db)/i,
+  /\/Library\/Keychains\//i,
+  /\/Library\/Cookies\//i,
+  /\/Library\/Containers\/com\.apple\.Safari\//i,
+  /\/Library\/Application Support\/[^/]+(\/[^/]+)*\/(Cookies|Login Data|Web Data|key4\.db|logins\.json|cookies\.sqlite)(-journal)?$/i,
+  /id_[a-z0-9]+(\.pub)?$/i,
+  /\.(pem|key|p12|pfx|keychain-db)$/i,
+  /\/config\.yaml/i,
+]
 
 function usable(p: string): string | null {
-  const full = resolve(p.startsWith('~/') ? join(HOME, p.slice(2)) : p)
-  if (DENY.some((re) => re.test(full)) || full.startsWith(resolve(UPLOAD_DIR))) return null
+  const asked = resolve(p.startsWith('~/') ? join(HOME, p.slice(2)) : p)
+  let full: string
+  try {
+    // Справжній шлях: посилання /tmp/x.txt → ~/.ssh/id_ed25519 не обійде заборону.
+    full = realpathSync(asked)
+  } catch {
+    return null
+  }
+  const denied = (f: string) => DENY.some((re) => re.test(f)) || f.toLowerCase().startsWith(resolve(UPLOAD_DIR).toLowerCase())
+  if (denied(asked) || denied(full)) return null
   try {
     const st = statSync(full)
     return st.isFile() && st.size > 0 && st.size <= MAX_FILE ? full : null
