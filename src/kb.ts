@@ -79,6 +79,8 @@ export function obsidianUriToPath(href: string, vaultName: string): string | nul
 // карткою нотатки, що відкриває її в чаті. Індекс нотаток вантажимо лише коли в тексті є щось схоже.
 
 let index: KbNote[] | null = null
+/** Назва сховища (тека, на яку вказує OBSIDIAN_VAULT_PATH у Hermes) — з сервера, не з коду. */
+let vaultName = ''
 let loadedAt = 0
 let loading: Promise<void> | null = null
 const listeners = new Set<() => void>()
@@ -89,6 +91,7 @@ export function loadNoteIndex(maxAgeMs = 60_000) {
     .index()
     .then((r) => {
       index = r.available ? r.list : []
+      vaultName = r.name || ''
     })
     .catch(() => {
       index = index ?? [] // немає доступу (сторінка спільного чату) — просто без карток
@@ -120,10 +123,10 @@ export function useNoteIndex(wanted: boolean): KbNote[] | null {
 }
 
 /** Нотатка за згадкою: шлях від кореня сховища (з .md чи без), з назвою сховища попереду чи без, або назва. */
-export function findNote(notes: KbNote[], raw: string): KbNote | null {
+export function findNote(notes: KbNote[], raw: string, vault = vaultName): KbNote | null {
   let t = raw.trim().replace(/^\/+/, '')
-  const at = t.indexOf('Hermes Vault/')
-  if (at >= 0) t = t.slice(at + 'Hermes Vault/'.length)
+  const at = vault ? t.indexOf(`${vault}/`) : -1
+  if (at >= 0) t = t.slice(at + vault.length + 1)
   const lower = t.toLowerCase()
   const withMd = lower.endsWith('.md') ? lower : `${lower}.md`
   const exact = notes.find((n) => n.path.toLowerCase() === withMd)
@@ -138,13 +141,14 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const noteLink = (n: KbNote, text?: string) => `[${(text || n.title).replace(/[[\]]/g, '')}](kbnote:${encodeURIComponent(n.path)})`
 
 /** Згадки нотаток у тексті відповіді → посилання kbnote:. Код у ``` і наявні посилання не чіпаємо. */
-export function linkifyNotes(text: string, notes: KbNote[] | null): string {
+export function linkifyNotes(text: string, notes: KbNote[] | null, vault = vaultName): string {
   if (!notes?.length || !/\.md\b|\[\[/.test(text)) return text
   // Повні шляхи нотаток, довші першими, щоб «A/B.md» не з'їв частину «A/B.md.bak».
   const paths = notes.map((n) => n.path).filter((p) => p.includes('/') || p.length > 6).sort((a, b) => b.length - a.length)
   const byPath = new Map(notes.map((n) => [n.path, n]))
   // Перед шляхом може стояти повний шлях до сховища (з пробілами, як «Mobile Documents» в iCloud).
-  const prefix = `(?:(?:~|/Users/)[^\\n\`"'()]*?Hermes Vault/|Hermes Vault/)?`
+  const v = vault ? escapeRe(vault) : ''
+  const prefix = v ? `(?:(?:~|/Users/)[^\\n\`"'()]*?${v}/|${v}/)?` : ''
   const pathRe = paths.length ? new RegExp(`${prefix}(${paths.map(escapeRe).join('|')})`, 'g') : null
   return text
     .split(/(```[\s\S]*?```|`[^`\n]+`|\[[^\]\n]*\]\([^)\n]*\))/g)
@@ -152,13 +156,13 @@ export function linkifyNotes(text: string, notes: KbNote[] | null): string {
       if (i % 2 === 1) {
         // Шлях у `коді` цілком — посилання; інший код і готові посилання лишаємо.
         if (chunk.startsWith('`') && !chunk.startsWith('```')) {
-          const n = findNote(notes, chunk.slice(1, -1))
+          const n = findNote(notes, chunk.slice(1, -1), vault)
           if (n && /\.md$|\//.test(chunk)) return noteLink(n)
         }
         return chunk
       }
       let out = chunk.replace(/\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|([^\]\n]*))?\]\]/g, (all, target: string, alias?: string) => {
-        const n = findNote(notes, target)
+        const n = findNote(notes, target, vault)
         return n ? noteLink(n, alias) : all
       })
       if (pathRe) out = out.replace(pathRe, (all, p: string) => (byPath.has(p) ? noteLink(byPath.get(p)!) : all))
