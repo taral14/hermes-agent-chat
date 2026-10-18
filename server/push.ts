@@ -88,6 +88,16 @@ export function runFinished(m: Message) {
   void send('replies', { title, body, url: `/c/${m.chatId}`, tag: `chat-${m.chatId}` })
 }
 
+/** Hermes сам написав у чат (розклад, send_message). Результати розкладу — під перемикачем «Задачі». */
+export function hermesDelivered(m: Message) {
+  if (watching(m.chatId)) return
+  const d = m.parts.find((p) => p.type === 'delivered') as Extract<Part, { type: 'delivered' }> | undefined
+  const chat = getChat(m.chatId)
+  const title = d?.source === 'cron' && d.job ? `⏰ ${d.job}` : chat?.title || 'Hermes'
+  const body = plain(m.text) || (m.attachments.length ? `Надіслав файл: ${m.attachments.map((a) => a.name).join(', ')}` : 'Нове повідомлення')
+  void send(d?.source === 'cron' ? 'jobs' : 'replies', { title, body, url: `/c/${m.chatId}`, tag: `hermes-${m.id}` })
+}
+
 export function promptRaised(m: Message, p: Extract<Part, { type: 'approval' | 'clarify' }>) {
   if (watching(m.chatId)) return
   const chat = getChat(m.chatId)

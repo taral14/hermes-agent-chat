@@ -50,6 +50,8 @@ export type Part =
   | { type: 'steer'; text: string }
   /** Результат слеш-команди (/status, /usage тощо) або службова примітка Hermes. */
   | { type: 'notice'; text: string }
+  /** Hermes надіслав це повідомлення сам: результат задачі за розкладом або send_message. */
+  | { type: 'delivered'; source: 'cron' | 'hermes'; job?: string; jobId?: string }
 
 export type Usage = { input_tokens?: number; output_tokens?: number; total_tokens?: number }
 

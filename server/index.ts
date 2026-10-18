@@ -105,7 +105,8 @@ import {
   nativeStop,
 } from './native.ts'
 import { gateway } from './gateway.ts'
-import { VAPID_PUBLIC, jobsWatched, sendTest, setPresence } from './push.ts'
+import { VAPID_PUBLIC, hermesDelivered, jobsWatched, sendTest, setPresence } from './push.ts'
+import { hookTokenOk, receiveFromHermes } from './inbox.ts'
 import {
   activeRunCount,
   addSteer,
@@ -725,6 +726,23 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     return void res.end()
   }
   if (path.startsWith('/api/public/') && (await publicApi(req, res, path, url))) return
+
+  // Hermes пише в чат сам (плагін webchat): лише з цього Mac, з ключем із data/.hermes-hook-token.
+  if (path === '/api/hooks/hermes' && method === 'POST') {
+    if (req.headers['cf-connecting-ip']) throw new HttpError(404, 'Невідомий маршрут')
+    if (!hookTokenOk(req.headers.authorization)) throw new HttpError(401, 'Неправильний ключ')
+    let r
+    try {
+      r = receiveFromHermes(await readJson(req))
+    } catch (err) {
+      if (err instanceof HttpError) throw err
+      throw new HttpError(400, (err as Error).message)
+    }
+    emit({ type: 'message', message: publicMessage(r.message) })
+    emitChat(r.message.chatId)
+    if (r.created) hermesDelivered(r.message)
+    return send(res, 200, { ok: true, message_id: r.message.id, chat_id: r.message.chatId })
+  }
   if (!authed(req)) throw new HttpError(401, 'Потрібен вхід')
 
   // Картка посилання з повідомлення: заголовок, опис, картинка. Сервер читає сторінку сам (див. unfurl.ts).

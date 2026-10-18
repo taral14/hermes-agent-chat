@@ -22,6 +22,7 @@ import {
 import { type GatewayEvent, GatewayError, type ServerRequest, gateway } from './gateway.ts'
 import { defaultEffort } from './hermes.ts'
 import { chatInstructions } from './prefs.ts'
+import { deliveredContext } from './inbox.ts'
 import { promptRaised } from './push.ts'
 import {
   type Live,
@@ -145,7 +146,7 @@ function blankMessage(chatId: string, role: Message['role'], createdAt: number):
 }
 
 /** Текст для моделі: інструкція чату + повідомлення + шляхи до прикріплених файлів. В історії лишається лише сам текст. */
-function apiText(text: string, attachments: Attachment[]): string {
+function apiText(text: string, attachments: Attachment[], context = ''): string {
   const lines = attachments
     .map((a) => getUpload(a.id))
     .filter((u) => u != null)
@@ -153,7 +154,7 @@ function apiText(text: string, attachments: Attachment[]): string {
   const files = lines.length
     ? `\n\n[Прикріплені файли. Вони збережені на цьому комп'ютері, відкривай їх своїми інструментами за потреби:]\n${lines.join('\n')}`
     : ''
-  return `[${chatInstructions()}]\n\n${text || 'Подивись прикріплені файли.'}${files}`
+  return `[${chatInstructions()}]\n\n${context ? `${context}\n\n[Повідомлення користувача:]\n` : ''}${text || 'Подивись прикріплені файли.'}${files}`
 }
 
 /** Картинки Hermes бачить напряму, але бере їх лише зі своєї теки кешу. */
@@ -199,7 +200,7 @@ async function submit(chat: ChatRow, assistant: MessageRow, user: MessageRow, te
     session_id: sessionId,
     submission_id: assistant.id,
     text,
-    api_text: apiText(text, user.attachments),
+    api_text: apiText(text, user.attachments, deliveredContext(chat.id, user.createdAt)),
     ...(images.length ? { attachments: images } : {}),
     ...(model?.model ? { model_override: { model: model.model, provider: model.provider } } : {}),
   })

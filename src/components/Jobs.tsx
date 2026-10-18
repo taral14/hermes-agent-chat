@@ -408,7 +408,7 @@ function formOf(job: Job | null): Form {
     name: job?.name ?? '',
     prompt: job?.prompt ?? '',
     draft: toDraft(job?.schedule),
-    deliver: job?.deliver ?? 'telegram',
+    deliver: job?.deliver ?? 'webchat',
     repeat: job?.repeat.times ?? null,
   }
 }
@@ -523,7 +523,9 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
   }
 
   const deliverOptions = [
+    { v: 'webchat', label: 'Веб-чат' },
     { v: 'telegram', label: 'Telegram' },
+    { v: 'webchat,telegram', label: 'Обидва' },
     ...(job?.origin?.platform && !['telegram', 'api_server', 'local'].includes(job.origin.platform) ? [{ v: 'origin', label: deliverLabel({ deliver: 'origin', origin: job.origin }) }] : []),
     { v: 'local', label: 'Лише зберігати' },
   ]

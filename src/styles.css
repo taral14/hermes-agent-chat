@@ -5569,3 +5569,25 @@ button.act-line:hover:not(:disabled) {
     scale: 0.92;
   }
 }
+
+/* ---------- Повідомлення, які Hermes надіслав сам ---------- */
+
+.msg-delivered {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-bottom: 8px;
+  padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  background: var(--bubble);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.msg-delivered.is-link:hover {
+  background: var(--hover);
+  color: var(--text);
+}

@@ -1,4 +1,5 @@
 import {
+  AlarmClock,
   AlertTriangle,
   Brain,
   ChevronRight,
@@ -19,6 +20,7 @@ import {
   Pencil,
   RotateCcw,
   Search,
+  Send,
   ShieldAlert,
   Sparkles,
   SquareTerminal,
@@ -635,6 +637,34 @@ function splitParts(m: Message): { activity: Part[]; answer: string } {
   return { activity: parts.slice(0, i), answer }
 }
 
+/** Плашка над повідомленням, яке Hermes надіслав сам: задача за розкладом (з переходом до неї) чи send_message. */
+function DeliveredBadge({ d }: { d: Extract<Part, { type: 'delivered' }> }) {
+  if (d.source !== 'cron') {
+    return (
+      <div className="msg-delivered">
+        <Send size={14} />
+        <span>Hermes написав сам</span>
+      </div>
+    )
+  }
+  const href = d.jobId ? `/jobs/${d.jobId}` : '/jobs'
+  return (
+    <a
+      className="msg-delivered is-link"
+      href={href}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey) return
+        e.preventDefault()
+        history.pushState(null, '', href)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }}
+    >
+      <AlarmClock size={14} />
+      <span>Задача за розкладом{d.job ? ` · ${d.job}` : ''}</span>
+    </a>
+  )
+}
+
 function AssistantMessage({ m }: { m: Message }) {
   const actions = useContext(ActionsContext)
   const { showMeta } = usePrefs()
@@ -645,7 +675,9 @@ function AssistantMessage({ m }: { m: Message }) {
       (p.type === 'approval' || p.type === 'clarify') && p.state === 'pending',
   )
   const notices = m.parts.filter((p): p is Extract<Part, { type: 'notice' }> => p.type === 'notice')
-  const showActivity = activity.filter((p) => p.type !== 'notice').length > 0 || (active && !answer)
+  const delivered = m.parts.find((p): p is Extract<Part, { type: 'delivered' }> => p.type === 'delivered')
+  const steps = activity.filter((p) => p.type !== 'notice' && p.type !== 'delivered')
+  const showActivity = steps.length > 0 || (active && !answer)
   return (
     <div className="msg msg-assistant">
       {notices.map((n, i) => (
@@ -654,7 +686,8 @@ function AssistantMessage({ m }: { m: Message }) {
           <span>{n.text.replace(/^⊙\s*/, '')}</span>
         </div>
       ))}
-      {showActivity && <Activity m={m} parts={activity.filter((p) => p.type !== 'notice')} active={active && !answer} />}
+      {delivered && <DeliveredBadge d={delivered} />}
+      {showActivity && <Activity m={m} parts={steps} active={active && !answer} />}
       {pending.map((p) =>
         p.type === 'approval' ? <ApprovalCard key={p.promptId} m={m} p={p} /> : <ClarifyCard key={p.promptId} m={m} p={p} />,
       )}

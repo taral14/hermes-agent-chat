@@ -215,7 +215,8 @@ export const STATUS_LABEL: Record<JobStatus, string> = {
 
 export function deliverLabel(j: Pick<Job, 'deliver' | 'origin'>): string {
   const v = (j.deliver || 'local').toLowerCase()
-  const platform = (p?: string) => (p ? (p === 'telegram' ? 'Telegram' : p[0]!.toUpperCase() + p.slice(1)) : 'туди, звідки створено')
+  const platform = (p?: string) =>
+    p ? (p === 'telegram' ? 'Telegram' : p === 'webchat' ? 'Веб-чат' : p[0]!.toUpperCase() + p.slice(1)) : 'туди, звідки створено'
   if (v === 'local') return 'Лише зберігати'
   if (v === 'origin') return platform(j.origin?.platform)
   return v.split(',').map((x) => platform(x.split(':')[0])).join(', ')
