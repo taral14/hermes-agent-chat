@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+import { registerSW } from './push.ts'
 import './styles.css'
 
 // iPhone: клавіатура зменшує лише visualViewport, а Safari прокручує сторінку, щоб показати поле вводу,
@@ -15,6 +16,8 @@ vv?.addEventListener('resize', syncViewport)
 vv?.addEventListener('scroll', syncViewport)
 window.addEventListener('resize', syncViewport)
 syncViewport()
+
+void registerSW()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

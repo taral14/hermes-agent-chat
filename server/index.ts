@@ -1,12 +1,17 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { Attachment, ModelChoice, ServerEvent } from '../src/shared.ts'
 import {
   DATA_DIR,
+  DEFAULT_PUSH,
+  type PushSettings,
+  deletePushSub,
+  getPushSub,
+  savePushSub,
   type MessageRow,
   UPLOAD_DIR,
   closeDb,
@@ -36,7 +41,9 @@ import {
 } from './hermes.ts'
 import { createJob, deleteJob, getJob, jobAction, jobRuns, listJobs, runOutput, updateJob } from './jobs.ts'
 import { CHAT_INSTRUCTIONS, mimeOf } from './media.ts'
+import { VAPID_PUBLIC, jobsWatched, sendTest, setPresence } from './push.ts'
 import {
+  activeRunCount,
   addSteer,
   backfillMedia,
   failMessage,
@@ -272,6 +279,7 @@ const EXT_MIME: Record<string, string> = {
   '.json': 'application/json',
   '.woff2': 'font/woff2',
   '.webmanifest': 'application/manifest+json',
+  '.webp': 'image/webp',
 }
 
 // ---------- Маршрути API ----------
@@ -300,7 +308,55 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   if (path === '/api/logout' && method === 'POST') {
     return send(res, 200, { ok: true }, { 'Set-Cookie': 'chat_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' })
   }
+  // Пінг для роутера: тримає сервер живим, поки Hermes працює (див. keepAlive нижче).
+  if (path === '/api/ping') {
+    res.writeHead(204, { 'Cache-Control': 'no-store' })
+    return void res.end()
+  }
   if (!authed(req)) throw new HttpError(401, 'Потрібен вхід')
+
+  if (path === '/api/presence' && method === 'POST') {
+    const b = await readJson<{ clientId?: string; visible?: boolean; chatId?: string | null }>(req)
+    if (typeof b.clientId === 'string' && b.clientId.length < 80) setPresence(b.clientId, Boolean(b.visible), b.chatId ?? null)
+    return send(res, 200, { ok: true })
+  }
+  if (path === '/api/push/key') return send(res, 200, { publicKey: VAPID_PUBLIC })
+  if (path.startsWith('/api/push/') && method === 'POST') {
+    const b = await readJson<{
+      subscription?: { endpoint?: string; keys?: { p256dh?: string; auth?: string } }
+      endpoint?: string
+      settings?: Partial<PushSettings>
+    }>(req)
+    const endpoint = b.subscription?.endpoint ?? b.endpoint ?? ''
+    if (!endpoint.startsWith('https://')) throw new HttpError(400, 'Немає підписки')
+    const action = path.slice('/api/push/'.length)
+    const clean = (x?: Partial<PushSettings>): Partial<PushSettings> =>
+      Object.fromEntries(Object.entries(x ?? {}).filter(([k, v]) => k in DEFAULT_PUSH && typeof v === 'boolean'))
+    if (action === 'subscribe') {
+      const k = b.subscription?.keys
+      if (!k?.p256dh || !k.auth) throw new HttpError(400, 'Неповна підписка')
+      const prev = getPushSub(endpoint)
+      const sub = { endpoint, keys: { p256dh: k.p256dh, auth: k.auth }, settings: { ...DEFAULT_PUSH, ...prev?.settings, ...clean(b.settings) }, ua: String(req.headers['user-agent'] ?? '').slice(0, 200) }
+      savePushSub(sub)
+      return send(res, 200, sub.settings)
+    }
+    const sub = getPushSub(endpoint)
+    if (action === 'status') return send(res, 200, sub ? sub.settings : null)
+    if (!sub) throw new HttpError(404, 'Цей пристрій не підписаний')
+    if (action === 'settings') {
+      sub.settings = { ...sub.settings, ...clean(b.settings) }
+      savePushSub(sub)
+      return send(res, 200, sub.settings)
+    }
+    if (action === 'unsubscribe') {
+      deletePushSub(endpoint)
+      return send(res, 200, { ok: true })
+    }
+    if (action === 'test') {
+      await sendTest(sub)
+      return send(res, 200, { ok: true })
+    }
+  }
 
   if (path === '/api/me') return send(res, 200, { username: loadConfig().username })
 
@@ -515,6 +571,20 @@ const server = createServer(async (req, res) => {
     else res.end()
   }
 })
+
+// Роутер зупиняє сервер після 30 хв без запитів. Поки Hermes працює над задачею або стежимо за розкладом,
+// стукаємо до себе через роутер, щоб не пропустити подію і пуш.
+const ROUTER = process.env.ROUTER_URL ?? 'http://127.0.0.1:8000'
+const PUBLIC_HOST = process.env.PUBLIC_HOST ?? 'chat.example.com'
+if (!DEV) {
+  setInterval(() => {
+    if (!activeRunCount() && !jobsWatched()) return
+    const r = httpRequest(`${ROUTER}/api/ping`, { headers: { Host: PUBLIC_HOST }, timeout: 10_000 }, (res) => res.resume())
+    r.on('error', () => {})
+    r.on('timeout', () => r.destroy())
+    r.end()
+  }, 5 * 60_000).unref()
+}
 
 loadConfig()
 resumeActiveRuns()

@@ -208,6 +208,7 @@ a {
 }
 
 .main {
+  padding-top: env(safe-area-inset-top);
   position: relative;
   flex: 1;
   min-width: 0;
@@ -238,7 +239,7 @@ a {
   background: var(--sidebar);
   display: flex;
   flex-direction: column;
-  padding: 8px 8px 0;
+  padding: calc(8px + env(safe-area-inset-top)) 8px 0;
 }
 
 .sidebar-top {
@@ -426,7 +427,7 @@ a {
 .sidebar-foot {
   border-top: 1px solid var(--border);
   margin: 0 -8px;
-  padding: 8px;
+  padding: 8px 8px max(8px, env(safe-area-inset-bottom));
 }
 
 .user-row {
@@ -2491,5 +2492,235 @@ button.act-line:hover:not(:disabled) {
   }
   .fab {
     display: inline-flex !important;
+  }
+}
+
+/* ---------- Сповіщення (нижня шторка) ---------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade 0.18s ease;
+}
+
+.sheet {
+  width: min(440px, calc(100% - 32px));
+  max-height: 88%;
+  overflow-y: auto;
+  padding: 18px 20px 22px;
+  border-radius: 28px;
+  background: var(--bg);
+  box-shadow: var(--menu-shadow);
+  animation: pop 0.2s ease;
+}
+
+.sheet-grip {
+  display: none;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.notif-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 10px 4px 4px;
+}
+
+.notif-hero p {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.notif-badge {
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.notif-badge.is-muted {
+  background: var(--bubble);
+  color: var(--text-2);
+}
+
+.steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--bubble);
+  font-size: 15px;
+}
+
+.step-n {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inline-icon {
+  vertical-align: -3px;
+}
+
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  background: var(--bubble);
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.notif-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  cursor: pointer;
+}
+
+.notif-row + .notif-row {
+  border-top: 1px solid var(--border);
+}
+
+.notif-row-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.notif-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notif-row-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.notif-row-hint {
+  font-size: 12.5px;
+  color: var(--text-3);
+  line-height: 1.35;
+}
+
+.notif-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.notif-actions .btn {
+  flex: 1;
+  min-height: 44px;
+}
+
+.notif-foot {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.notif-msg {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--bubble);
+  font-size: 14px;
+  text-align: center;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (max-width: 768px) {
+  .sheet-backdrop {
+    align-items: flex-end;
+  }
+  .sheet {
+    width: 100%;
+    border-radius: 28px 28px 0 0;
+    padding: 8px 18px max(22px, env(safe-area-inset-bottom));
+    animation: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .sheet-grip {
+    display: block;
+    width: 38px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--border-strong);
+    margin: 0 auto 10px;
   }
 }

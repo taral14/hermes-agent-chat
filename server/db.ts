@@ -1,7 +1,9 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Attachment, Chat, Message, ModelChoice, Part, Usage } from '../src/shared.ts'
+import type { Attachment, Chat, Message, ModelChoice, Part, PushSettings, Usage } from '../src/shared.ts'
+
+export type { PushSettings }
 
 export const DATA_DIR = process.env.DATA_DIR ?? join(import.meta.dirname, '..', 'data')
 export const UPLOAD_DIR = join(DATA_DIR, 'uploads')
@@ -38,6 +40,14 @@ db.exec(`
     finished_at INTEGER
   );
   CREATE INDEX IF NOT EXISTS messages_chat ON messages(chat_id, created_at);
+  CREATE TABLE IF NOT EXISTS push_subs (
+    endpoint TEXT PRIMARY KEY,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    settings TEXT NOT NULL DEFAULT '{}',
+    ua TEXT,
+    created_at INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS uploads (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -240,6 +250,38 @@ export function insertUpload(u: UploadRow) {
 export function getUpload(id: string): UploadRow | null {
   const r = db.prepare('SELECT * FROM uploads WHERE id = ?').get(id)
   return r ? { id: str(r.id), name: str(r.name), mime: str(r.mime), size: Number(r.size), path: str(r.path) } : null
+}
+
+export type PushSub = { endpoint: string; keys: { p256dh: string; auth: string }; settings: PushSettings; ua: string }
+export const DEFAULT_PUSH: PushSettings = { replies: true, prompts: true, jobs: false }
+
+function toSub(r: Row): PushSub {
+  return {
+    endpoint: str(r.endpoint),
+    keys: { p256dh: str(r.p256dh), auth: str(r.auth) },
+    settings: { ...DEFAULT_PUSH, ...json<Partial<PushSettings>>(r.settings, {}) },
+    ua: str(r.ua),
+  }
+}
+
+export function listPushSubs(): PushSub[] {
+  return db.prepare('SELECT * FROM push_subs').all().map(toSub)
+}
+
+export function getPushSub(endpoint: string): PushSub | null {
+  const r = db.prepare('SELECT * FROM push_subs WHERE endpoint = ?').get(endpoint)
+  return r ? toSub(r) : null
+}
+
+export function savePushSub(s: PushSub) {
+  db.prepare(
+    `INSERT INTO push_subs (endpoint, p256dh, auth, settings, ua, created_at) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth, settings = excluded.settings, ua = excluded.ua`,
+  ).run(s.endpoint, s.keys.p256dh, s.keys.auth, JSON.stringify(s.settings), s.ua, Date.now())
+}
+
+export function deletePushSub(endpoint: string) {
+  db.prepare('DELETE FROM push_subs WHERE endpoint = ?').run(endpoint)
 }
 
 export function closeDb() {

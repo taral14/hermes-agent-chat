@@ -3,6 +3,7 @@
 import type { Message, Part } from '../src/shared.ts'
 import { type MessageRow, activeMessages, answersWithoutFiles, getChat, getMessage, saveMessage, updateChat } from './db.ts'
 import { collectMedia } from './media.ts'
+import { promptRaised, runFinished } from './push.ts'
 import {
   type HermesEvent,
   HermesError,
@@ -89,6 +90,7 @@ function finish(l: Live, status: Message['status'], patch: { text?: string; erro
   l.abort.abort()
   live.delete(m.id)
   void refreshTitle(m.chatId)
+  runFinished(m)
 }
 
 /** Hermes сам придумує назву сесії після перших реплік; підтягуємо її, якщо користувач не перейменовував. */
@@ -182,6 +184,7 @@ function apply(l: Live, e: HermesEvent) {
         choices: Array.isArray(e.choices) ? e.choices.map(str) : ['once', 'deny'],
         state: 'pending',
       })
+      promptRaised(m, parts[parts.length - 1] as Extract<Part, { type: 'approval' }>)
       return flush(l, true)
     }
     case 'approval.responded':
@@ -205,6 +208,7 @@ function apply(l: Live, e: HermesEvent) {
         multi: Boolean(e.multi_select),
         state: 'pending',
       })
+      promptRaised(m, parts[parts.length - 1] as Extract<Part, { type: 'clarify' }>)
       return flush(l, true)
     }
     case 'clarify.settled': {
@@ -364,6 +368,8 @@ export function backfillMedia() {
     saveMessage(m)
   }
 }
+
+export const activeRunCount = () => live.size
 
 export function stopAll() {
   for (const l of live.values()) {

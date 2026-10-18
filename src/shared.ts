@@ -119,6 +119,9 @@ export type JobRun = {
   tools: number
 }
 
+/** Які сповіщення отримує пристрій. */
+export type PushSettings = { replies: boolean; prompts: boolean; jobs: boolean }
+
 /** Повідомлення серверної SSE-шини /api/events. */
 export type ServerEvent =
   | { type: 'message'; message: Message }

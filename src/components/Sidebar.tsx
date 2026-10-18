@@ -1,4 +1,4 @@
-import { CalendarClock, LogOut, MoreHorizontal, PanelLeftClose, Pencil, Pin, PinOff, Search, SquarePen, Trash2, X } from 'lucide-react'
+import { Bell, CalendarClock, LogOut, MoreHorizontal, PanelLeftClose, Pencil, Pin, PinOff, Search, SquarePen, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Chat } from '../shared.ts'
 
@@ -15,6 +15,7 @@ type Props = {
   onLogout: () => void
   onJobs: () => void
   jobsActive: boolean
+  onNotifications: () => void
 }
 
 function groupOf(ts: number): string {
@@ -179,6 +180,9 @@ export function Sidebar(p: Props) {
         <div className="user-row">
           <span className="avatar">{p.username.slice(0, 1).toUpperCase()}</span>
           <span className="user-name">{p.username}</span>
+          <button type="button" className="icon-btn" title="Сповіщення" aria-label="Сповіщення" onClick={p.onNotifications}>
+            <Bell size={17} />
+          </button>
           <button type="button" className="icon-btn" title="Вийти" aria-label="Вийти" onClick={p.onLogout}>
             <LogOut size={17} />
           </button>

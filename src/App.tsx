@@ -4,6 +4,8 @@ import { api } from './api.ts'
 import { Composer, type ComposerHandle } from './components/Composer.tsx'
 import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { Login } from './components/Login.tsx'
+import { Notifications } from './components/Notifications.tsx'
+import { reportPresence } from './push.ts'
 import { MessageView } from './components/MessageView.tsx'
 import { ModelPicker } from './components/ModelPicker.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
@@ -51,6 +53,7 @@ export default function App() {
   const [sidebar, setSidebar] = useState(() => !isNarrow())
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [notif, setNotif] = useState(false)
   const [atBottom, setAtBottom] = useState(true)
   const scroller = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
@@ -152,6 +155,37 @@ export default function App() {
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // Сервер не шле пуш про чат, який зараз відкритий у видимій вкладці.
+  useEffect(() => {
+    if (auth !== 'in') return
+    const report = () => reportPresence(currentId)
+    report()
+    const t = setInterval(() => document.visibilityState === 'visible' && report(), 60_000)
+    document.addEventListener('visibilitychange', report)
+    window.addEventListener('focus', report)
+    window.addEventListener('blur', report)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', report)
+      window.removeEventListener('focus', report)
+      window.removeEventListener('blur', report)
+    }
+  }, [auth, currentId])
+
+  // Клік по сповіщенню у вже відкритому вікні: service worker просить перейти на потрібну сторінку.
+  useEffect(() => {
+    const sw = navigator.serviceWorker
+    if (!sw) return
+    const onMsg = (e: MessageEvent<{ type?: string; url?: string }>) => {
+      if (e.data?.type !== 'navigate' || !e.data.url) return
+      history.pushState(null, '', e.data.url)
+      setCurrentId(chatIdFromPath())
+      setJobsRoute(jobsFromPath())
+    }
+    sw.addEventListener('message', onMsg)
+    return () => sw.removeEventListener('message', onMsg)
   }, [])
 
   useEffect(() => {
@@ -278,6 +312,10 @@ export default function App() {
             onNew={newChat}
             jobsActive={Boolean(jobsRoute)}
             onJobs={() => goJobs({ kind: 'list' })}
+            onNotifications={() => {
+              if (isNarrow()) setSidebar(false)
+              setNotif(true)
+            }}
             onClose={() => setSidebar(false)}
             onRename={(id, title) => {
               setChats((c) => c.map((x) => (x.id === id ? { ...x, title } : x)))
@@ -357,6 +395,7 @@ export default function App() {
         )}
         {dragging && <div className="drop-overlay">Перетягни файли сюди, щоб додати їх до повідомлення</div>}
         {error && <div className="toast">{error}</div>}
+        {notif && <Notifications onClose={() => setNotif(false)} />}
       </main>
     </div>
   )
