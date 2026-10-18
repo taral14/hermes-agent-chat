@@ -838,6 +838,15 @@ a {
   color: var(--text-2);
   padding: 2px 0;
   max-width: 100%;
+  min-width: 0;
+}
+
+/* Довга назва інструмента обрізається, а час і кількість дій лишаються видимими. */
+.activity-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .activity-head:hover {
@@ -847,6 +856,7 @@ a {
 .activity-meta {
   color: var(--text-3);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .activity-chevron {
@@ -916,7 +926,11 @@ button.act-line:hover:not(:disabled) {
 .act-label {
   font-weight: 500;
   white-space: nowrap;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .act-preview {

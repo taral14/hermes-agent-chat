@@ -43,9 +43,16 @@ const TOOLS: [RegExp, LucideIcon, string][] = [
   [/clarify/, CircleHelp, 'Питання'],
 ]
 
+/** mcp__firered_tts__synthesize_speech → «firered tts: synthesize speech». */
+function prettyTool(tool: string) {
+  const mcp = /^mcp__(.+?)__(.+)$/.exec(tool)
+  const human = (x: string) => x.replace(/_+/g, ' ').trim()
+  return mcp ? `${human(mcp[1]!)}: ${human(mcp[2]!)}` : human(tool)
+}
+
 function toolMeta(tool: string): [LucideIcon, string] {
-  for (const [re, icon, label] of TOOLS) if (re.test(tool)) return [icon, label]
-  return [Wrench, tool]
+  if (!tool.startsWith('mcp__')) for (const [re, icon, label] of TOOLS) if (re.test(tool)) return [icon, label]
+  return [Wrench, prettyTool(tool)]
 }
 
 function formatDuration(ms: number) {
@@ -333,7 +340,7 @@ function Activity({ m, parts, active }: { m: Message; parts: Part[]; active: boo
   return (
     <div className={`activity ${open ? 'is-open' : ''}`}>
       <button type="button" className="activity-head" onClick={() => setOpen((o) => !o)}>
-        <span className={active ? 'shimmer' : ''}>{title}</span>
+        <span className={`activity-title ${active ? 'shimmer' : ''}`}>{title}</span>
         <span className="activity-meta">
           {active && ` · ${formatDuration(elapsed)}`}
           {steps > 0 && ` · ${steps} ${steps === 1 ? 'дія' : steps < 5 ? 'дії' : 'дій'}`}
