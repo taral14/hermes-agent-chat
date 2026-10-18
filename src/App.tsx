@@ -5,6 +5,7 @@ import { Composer, type ComposerHandle } from './components/Composer.tsx'
 import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { Login } from './components/Login.tsx'
 import { Notifications } from './components/Notifications.tsx'
+import { Security } from './components/Security.tsx'
 import { reportPresence } from './push.ts'
 import { MessageView } from './components/MessageView.tsx'
 import { ModelPicker } from './components/ModelPicker.tsx'
@@ -54,6 +55,7 @@ export default function App() {
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [notif, setNotif] = useState(false)
+  const [security, setSecurity] = useState(false)
   const [atBottom, setAtBottom] = useState(true)
   const scroller = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
@@ -64,6 +66,13 @@ export default function App() {
   const runningMsg = list?.findLast((m) => m.role === 'assistant' && ACTIVE.has(m.status)) ?? null
 
   // ---------- Завантаження ----------
+
+  const onLoggedIn = useCallback(() => {
+    api.me().then((r) => {
+      setUsername(r.username)
+      setAuth('in')
+    })
+  }, [])
 
   const loadChats = useCallback(() => api.chats().then((c) => setChats(sortChats(c))), [])
   const loadChat = useCallback(async (id: string) => {
@@ -297,7 +306,7 @@ export default function App() {
   )
 
   if (auth === 'unknown') return <div className="boot" />
-  if (auth === 'out') return <Login onDone={() => api.me().then((r) => (setUsername(r.username), setAuth('in')))} />
+  if (auth === 'out') return <Login onDone={onLoggedIn} />
 
   return (
     <div className={`app ${sidebar ? 'sidebar-open' : ''}`}>
@@ -315,6 +324,10 @@ export default function App() {
             onNotifications={() => {
               if (isNarrow()) setSidebar(false)
               setNotif(true)
+            }}
+            onSecurity={() => {
+              if (isNarrow()) setSidebar(false)
+              setSecurity(true)
             }}
             onClose={() => setSidebar(false)}
             onRename={(id, title) => {
@@ -396,6 +409,7 @@ export default function App() {
         {dragging && <div className="drop-overlay">Перетягни файли сюди, щоб додати їх до повідомлення</div>}
         {error && <div className="toast">{error}</div>}
         {notif && <Notifications onClose={() => setNotif(false)} />}
+        {security && <Security onClose={() => setSecurity(false)} />}
       </main>
     </div>
   )

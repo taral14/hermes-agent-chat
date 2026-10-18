@@ -186,7 +186,7 @@ function ApprovalCard({ m, p }: { m: Message; p: Extract<Part, { type: 'approval
       <div className={`prompt-done ${denied ? 'is-denied' : ''}`}>
         {denied ? <CircleX size={15} /> : p.choice ? <CircleCheck size={15} /> : <ShieldAlert size={15} />}
         <span>
-          {p.choice ? (denied ? 'Відхилено' : CHOICE_LABEL[p.choice] ?? p.choice) : 'Запит на дозвіл закрито'}:{' '}
+          {p.auto ? 'Дозволено автоматично' : p.choice ? (denied ? 'Відхилено' : CHOICE_LABEL[p.choice] ?? p.choice) : 'Запит на дозвіл закрито'}:{' '}
           <code>{p.command}</code>
         </span>
       </div>

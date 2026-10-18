@@ -31,6 +31,8 @@ export type Part =
       choices: string[]
       state: 'pending' | 'answered' | 'settled'
       choice?: string
+      /** Дозволено автоматично (налаштування «Дозволяти все»). */
+      auto?: boolean
     }
   | {
       type: 'clarify'

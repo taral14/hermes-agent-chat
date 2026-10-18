@@ -48,6 +48,21 @@ db.exec(`
     ua TEXT,
     created_at INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS passkeys (
+    id TEXT PRIMARY KEY,
+    public_key TEXT NOT NULL,
+    counter INTEGER NOT NULL DEFAULT 0,
+    transports TEXT NOT NULL DEFAULT '[]',
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    backed_up INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    last_used_at INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS uploads (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -282,6 +297,90 @@ export function savePushSub(s: PushSub) {
 
 export function deletePushSub(endpoint: string) {
   db.prepare('DELETE FROM push_subs WHERE endpoint = ?').run(endpoint)
+}
+
+export type PasskeyRow = {
+  id: string
+  publicKey: string
+  counter: number
+  transports: string[]
+  name: string
+  kind: 'device' | 'security-key'
+  backedUp: boolean
+  createdAt: number
+  lastUsedAt: number | null
+}
+
+function toPasskey(r: Row): PasskeyRow {
+  return {
+    id: str(r.id),
+    publicKey: str(r.public_key),
+    counter: Number(r.counter),
+    transports: json<string[]>(r.transports, []),
+    name: str(r.name),
+    kind: str(r.kind) === 'security-key' ? 'security-key' : 'device',
+    backedUp: Boolean(r.backed_up),
+    createdAt: Number(r.created_at),
+    lastUsedAt: r.last_used_at == null ? null : Number(r.last_used_at),
+  }
+}
+
+export function listPasskeys(): PasskeyRow[] {
+  return db.prepare('SELECT * FROM passkeys ORDER BY created_at').all().map(toPasskey)
+}
+
+export function getPasskey(id: string): PasskeyRow | null {
+  const r = db.prepare('SELECT * FROM passkeys WHERE id = ?').get(id)
+  return r ? toPasskey(r) : null
+}
+
+export function insertPasskey(p: PasskeyRow) {
+  db.prepare(
+    'INSERT INTO passkeys (id, public_key, counter, transports, name, kind, backed_up, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(p.id, p.publicKey, p.counter, JSON.stringify(p.transports), p.name, p.kind, p.backedUp ? 1 : 0, p.createdAt)
+}
+
+export function touchPasskey(id: string, counter: number) {
+  db.prepare('UPDATE passkeys SET counter = ?, last_used_at = ? WHERE id = ?').run(counter, Date.now(), id)
+}
+
+export function renamePasskey(id: string, name: string) {
+  db.prepare('UPDATE passkeys SET name = ? WHERE id = ?').run(name, id)
+}
+
+export function deletePasskey(id: string) {
+  db.prepare('DELETE FROM passkeys WHERE id = ?').run(id)
+}
+
+export function getSetting(key: string): string | null {
+  const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key)
+  return r ? str(r.value) : null
+}
+
+export function setSetting(key: string, value: string) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+}
+
+/** Файли, на які ще посилаються повідомлення. */
+function referencedUploads(): Set<string> {
+  const ids = new Set<string>()
+  for (const r of db.prepare(`SELECT attachments FROM messages WHERE attachments != '[]'`).all())
+    for (const a of json<{ id: string }[]>(r.attachments, [])) ids.add(a.id)
+  return ids
+}
+
+/** Завантаження, які вже нікому не потрібні: їхній чат видалено, або файл так і не надіслали за добу. */
+export function orphanUploads(minAgeMs: number): UploadRow[] {
+  const used = referencedUploads()
+  return db
+    .prepare('SELECT * FROM uploads WHERE created_at < ?')
+    .all(Date.now() - minAgeMs)
+    .filter((r) => !used.has(str(r.id)))
+    .map((r) => ({ id: str(r.id), name: str(r.name), mime: str(r.mime), size: Number(r.size), path: str(r.path) }))
+}
+
+export function deleteUploadRow(id: string) {
+  db.prepare('DELETE FROM uploads WHERE id = ?').run(id)
 }
 
 export function closeDb() {

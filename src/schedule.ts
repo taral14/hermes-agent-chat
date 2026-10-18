@@ -185,6 +185,7 @@ export function relative(iso: string | number | null | undefined, now = Date.now
   const days = dayDiff(d, new Date(now))
   if (diff > 0 && diff < 60_000) return 'менш ніж за хвилину'
   if (diff > 0 && diff < 3600_000) return `через ${Math.round(diff / 60_000)} хв`
+  if (diff <= 0 && diff > -60_000) return 'щойно'
   if (diff < 0 && diff > -3600_000) return `${Math.max(1, Math.round(-diff / 60_000))} хв тому`
   if (days === 0) return `сьогодні ${at}`
   if (days === 1) return `завтра ${at}`

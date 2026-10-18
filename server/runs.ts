@@ -1,12 +1,13 @@
 // Ведення запусків Hermes: сервер сам слухає події, зберігає їх у SQLite і розсилає вкладкам.
 // Тому довга задача не залежить від відкритого браузера, а після перезапуску сервера підхоплюється знову.
 import type { Message, Part } from '../src/shared.ts'
-import { type MessageRow, activeMessages, answersWithoutFiles, getChat, getMessage, saveMessage, updateChat } from './db.ts'
+import { type MessageRow, activeMessages, answersWithoutFiles, getChat, getMessage, getSetting, saveMessage, updateChat } from './db.ts'
 import { collectMedia } from './media.ts'
 import { promptRaised, runFinished } from './push.ts'
 import {
   type HermesEvent,
   HermesError,
+  answerApproval,
   getRun,
   lastAssistantText,
   sessionTitle,
@@ -29,6 +30,9 @@ const live = new Map<string, Live>()
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v))
+
+/** У веб-чаті Hermes за замовчуванням не чекає дозволу: усе дозволено (вимикається в «Вхід і безпека»). */
+export const autoApprove = () => getSetting('auto_approve') !== 'off'
 
 /** Зберегти і розіслати. Дельти тексту групуємо, решту подій шлемо одразу. */
 function flush(l: Live, now = false) {
@@ -184,7 +188,22 @@ function apply(l: Live, e: HermesEvent) {
         choices: Array.isArray(e.choices) ? e.choices.map(str) : ['once', 'deny'],
         state: 'pending',
       })
-      promptRaised(m, parts[parts.length - 1] as Extract<Part, { type: 'approval' }>)
+      const a = parts[parts.length - 1] as Extract<Part, { type: 'approval' }>
+      if (autoApprove()) {
+        // «Дозволяти все»: відповідаємо одразу, задача не зупиняється й не чекає людину.
+        const choice = a.choices.includes('session') ? 'session' : 'once'
+        a.state = 'answered'
+        a.choice = choice
+        a.auto = true
+        answerApproval(m.runId!, a.promptId, a.generation, choice).catch((err: Error) => {
+          console.warn(`[run ${m.runId}] автодозвіл не пройшов: ${err.message}`)
+          a.state = 'pending'
+          a.auto = false
+          a.choice = undefined
+          flush(l, true)
+          promptRaised(m, a)
+        })
+      } else promptRaised(m, a)
       return flush(l, true)
     }
     case 'approval.responded':

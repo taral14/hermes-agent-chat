@@ -1,10 +1,10 @@
 // Файли, які Hermes надсилає в чат: тег MEDIA:<шлях> (як у Telegram) або окремий рядок із шляхом до файлу.
 import { randomBytes } from 'node:crypto'
-import { constants, copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
+import { constants, copyFileSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, extname, join, resolve } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import type { Attachment } from '../src/shared.ts'
-import { UPLOAD_DIR, insertUpload } from './db.ts'
+import { UPLOAD_DIR, deleteUploadRow, insertUpload, orphanUploads } from './db.ts'
 
 const MAX_FILE = 500 * 1024 * 1024
 
@@ -113,4 +113,21 @@ export function collectMedia(text: string): { attachments: Attachment[]; text: s
     }
   }
   return { attachments, text: attachments.length ? cleaned : text }
+}
+
+/**
+ * Чистка сховища файлів. Файли видаленого чату прибираються одразу (minAge 0),
+ * а завантажені, але не надіслані — через добу. Резервних копій немає навмисно.
+ */
+export function sweepUploads(minAgeMs = 24 * 3600_000, only?: Set<string>) {
+  let freed = 0
+  for (const u of orphanUploads(minAgeMs)) {
+    if (only && !only.has(u.id)) continue
+    const dir = dirname(u.path)
+    // Лише наші теки data/uploads/<id>/, нічого поза сховищем.
+    if (resolve(dir).startsWith(resolve(UPLOAD_DIR) + '/')) rmSync(dir, { recursive: true, force: true })
+    deleteUploadRow(u.id)
+    freed += u.size
+  }
+  if (freed) console.log(`[media] прибрано ${(freed / 1024 / 1024).toFixed(1)} МБ файлів без чату`)
 }

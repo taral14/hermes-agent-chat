@@ -8,6 +8,11 @@ import type { Attachment, ModelChoice, ServerEvent } from '../src/shared.ts'
 import {
   DATA_DIR,
   DEFAULT_PUSH,
+  type PasskeyRow,
+  deletePasskey,
+  listPasskeys,
+  renamePasskey,
+  setSetting,
   type PushSettings,
   deletePushSub,
   getPushSub,
@@ -39,12 +44,15 @@ import {
   steerRun,
   stopRun,
 } from './hermes.ts'
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
+import { PasskeyError, loginOptions, loginVerify, passwordLoginAllowed, registerVerify, registrationOptions } from './passkeys.ts'
 import { createJob, deleteJob, getJob, jobAction, jobRuns, listJobs, runOutput, updateJob } from './jobs.ts'
-import { CHAT_INSTRUCTIONS, mimeOf } from './media.ts'
+import { CHAT_INSTRUCTIONS, mimeOf, sweepUploads } from './media.ts'
 import { VAPID_PUBLIC, jobsWatched, sendTest, setPresence } from './push.ts'
 import {
   activeRunCount,
   addSteer,
+  autoApprove,
   backfillMedia,
   failMessage,
   liveMessage,
@@ -65,7 +73,7 @@ const SESSION_DAYS = 90
 
 // ---------- Конфіг і сесії ----------
 
-type Config = { username: string; password: string }
+type Config = { username: string; password: string; allowPassword: boolean }
 
 /** Логін і пароль єдиного користувача — у config.yaml поруч із package.json (не в git). */
 function loadConfig(): Config {
@@ -73,7 +81,8 @@ function loadConfig(): Config {
   if (!existsSync(file)) throw new Error(`Немає ${file}: створи його з полями username і password`)
   const c = parseYaml(readFileSync(file, 'utf8')) as Partial<Config> | null
   if (!c?.username || !c?.password) throw new Error('config.yaml: потрібні username і password')
-  return { username: String(c.username), password: String(c.password) }
+  // allow_password: true — аварійний вхід за паролем, навіть якщо в чаті ввімкнено «лише ключі».
+  return { username: String(c.username), password: String(c.password), allowPassword: (c as { allow_password?: unknown }).allow_password === true }
 }
 
 const SECRET_FILE = join(DATA_DIR, '.session-secret')
@@ -103,6 +112,11 @@ function same(a: string, b: string) {
   const x = createHmac('sha256', SECRET).update(a).digest()
   const y = createHmac('sha256', SECRET).update(b).digest()
   return timingSafeEqual(x, y)
+}
+
+function loginCookie(req: IncomingMessage) {
+  const secure = req.headers['x-forwarded-proto'] === 'https' || Boolean(req.headers['cf-connecting-ip'])
+  return `chat_session=${sessionCookie()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure ? '; Secure' : ''}`
 }
 
 const loginFails = new Map<string, { n: number; until: number }>()
@@ -294,16 +308,45 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     if (f && f.until > Date.now()) throw new HttpError(429, 'Забагато спроб. Спробуй за хвилину.')
     const { username, password } = await readJson<{ username?: string; password?: string }>(req)
     const cfg = loadConfig()
+    if (!passwordLoginAllowed() && !cfg.allowPassword) throw new HttpError(403, 'Вхід за паролем вимкнено. Увійди з ключем.')
     if (!same(String(username ?? '').trim(), cfg.username) || !same(String(password ?? ''), cfg.password)) {
       const n = (f?.n ?? 0) + 1
       loginFails.set(ip, { n, until: n >= 5 ? Date.now() + 60_000 : 0 })
       throw new HttpError(401, 'Неправильний логін або пароль')
     }
     loginFails.delete(ip)
-    const secure = req.headers['x-forwarded-proto'] === 'https' || Boolean(req.headers['cf-connecting-ip'])
-    return send(res, 200, { ok: true }, {
-      'Set-Cookie': `chat_session=${sessionCookie()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure ? '; Secure' : ''}`,
-    })
+    return send(res, 200, { ok: true }, { 'Set-Cookie': loginCookie(req) })
+  }
+
+  // ---------- Ключі доступу ----------
+  if (path === '/api/auth/methods') {
+    return send(res, 200, { passkeys: listPasskeys().length > 0, password: passwordLoginAllowed() || loadConfig().allowPassword })
+  }
+  try {
+    if (path === '/api/auth/passkey/options' && method === 'POST') {
+      const b = await readJson<{ autofill?: boolean }>(req)
+      return send(res, 200, await loginOptions(req, Boolean(b.autofill)))
+    }
+    if (path === '/api/auth/passkey/login' && method === 'POST') {
+      const ip = clientIp(req)
+      const f = loginFails.get(ip)
+      if (f && f.until > Date.now()) throw new HttpError(429, 'Забагато спроб. Спробуй за хвилину.')
+      const b = await readJson<{ challengeId?: string; response?: AuthenticationResponseJSON }>(req)
+      if (!b.response) throw new HttpError(400, 'Немає відповіді ключа')
+      try {
+        await loginVerify(b.challengeId, b.response)
+      } catch (err) {
+        const n = (f?.n ?? 0) + 1
+        loginFails.set(ip, { n, until: n >= 5 ? Date.now() + 60_000 : 0 })
+        throw err
+      }
+      loginFails.delete(ip)
+      return send(res, 200, { ok: true }, { 'Set-Cookie': loginCookie(req) })
+    }
+  } catch (err) {
+    if (err instanceof PasskeyError) throw new HttpError(400, err.message)
+    if (err instanceof HttpError) throw err
+    throw new HttpError(400, `Ключ не підійшов: ${(err as Error).message}`)
   }
   if (path === '/api/logout' && method === 'POST') {
     return send(res, 200, { ok: true }, { 'Set-Cookie': 'chat_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' })
@@ -360,6 +403,51 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
 
   if (path === '/api/me') return send(res, 200, { username: loadConfig().username })
 
+  if (path.startsWith('/api/auth/')) {
+    try {
+      const pub = (k: PasskeyRow) => ({ id: k.id, name: k.name, kind: k.kind, backedUp: k.backedUp, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt })
+      const security = () => ({ passkeys: listPasskeys().map(pub), passwordLogin: passwordLoginAllowed(), autoApprove: autoApprove() })
+      if (path === '/api/auth/security' && method === 'GET') return send(res, 200, security())
+      if (path === '/api/auth/passkeys/options' && method === 'POST') {
+        const b = await readJson<{ kind?: string }>(req)
+        return send(res, 200, await registrationOptions(req, loadConfig().username, b.kind === 'security-key' ? 'security-key' : 'device'))
+      }
+      if (path === '/api/auth/passkeys' && method === 'POST') {
+        const b = await readJson<{ challengeId?: string; response?: RegistrationResponseJSON; name?: string }>(req)
+        if (!b.response) throw new HttpError(400, 'Немає відповіді ключа')
+        await registerVerify(req, b.challengeId, b.response, b.name)
+        return send(res, 200, security())
+      }
+      const k = path.match(/^\/api\/auth\/passkeys\/([\w-]+)$/)
+      if (k && method === 'PATCH') {
+        const b = await readJson<{ name?: string }>(req)
+        if (b.name?.trim()) renamePasskey(k[1]!, b.name.trim().slice(0, 60))
+        return send(res, 200, security())
+      }
+      if (k && method === 'DELETE') {
+        deletePasskey(k[1]!)
+        // Без жодного ключа «лише ключі» не має сенсу: повертаємо вхід за паролем, щоб не замкнутись.
+        if (!listPasskeys().length) setSetting('password_login', 'on')
+        return send(res, 200, security())
+      }
+      if (path === '/api/auth/auto-approve' && method === 'POST') {
+        const b = await readJson<{ enabled?: boolean }>(req)
+        setSetting('auto_approve', b.enabled === false ? 'off' : 'on')
+        return send(res, 200, security())
+      }
+      if (path === '/api/auth/password-login' && method === 'POST') {
+        const b = await readJson<{ enabled?: boolean }>(req)
+        if (b.enabled === false && !listPasskeys().length) throw new HttpError(400, 'Спершу додай хоча б один ключ')
+        setSetting('password_login', b.enabled === false ? 'off' : 'on')
+        return send(res, 200, security())
+      }
+    } catch (err) {
+      if (err instanceof PasskeyError) throw new HttpError(400, err.message)
+      if (err instanceof HttpError) throw err
+      throw new HttpError(400, `Не вдалося: ${(err as Error).message}`)
+    }
+  }
+
   if (path === '/api/events') {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -411,7 +499,10 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
         const l = liveMessage(msg.id)
         if (l?.runId && ['queued', 'running', 'stopping'].includes(l.status)) await stopRun(l.runId).catch(() => {})
       }
+      // Вкладення цього чату, які більше ніде не використовуються, видаляємо одразу.
+      const attached = new Set(listMessages(chat.id).flatMap((x) => x.attachments.map((a) => a.id)))
       deleteChat(chat.id)
+      if (attached.size) sweepUploads(0, attached)
       void deleteSession(chat.sessionId)
       emit({ type: 'chat-deleted', chatId: chat.id })
       return send(res, 200, { ok: true })
@@ -589,6 +680,8 @@ if (!DEV) {
 loadConfig()
 resumeActiveRuns()
 backfillMedia()
+sweepUploads()
+setInterval(() => sweepUploads(), 6 * 3600_000).unref()
 server.listen(PORT, '127.0.0.1', () => console.log(`chat: http://127.0.0.1:${PORT}${DEV ? ' (dev)' : ''}`))
 
 function shutdown() {
