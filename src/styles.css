@@ -3453,3 +3453,402 @@ button.act-line:hover:not(:disabled) {
   height: 44px;
   font-size: 18px;
 }
+
+/* ---------- База знань ---------- */
+
+.kb-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 8px 0 16px;
+  margin-bottom: 22px;
+  border-radius: 16px;
+  background: var(--bubble);
+  color: var(--text-2);
+}
+
+.kb-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.kb-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.kb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--bubble);
+  text-align: left;
+  min-width: 0;
+}
+
+.kb-card:hover {
+  background: var(--hover);
+}
+
+.kb-card-folder {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.kb-card-title {
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kb-card-snippet {
+  font-size: 13.5px;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kb-tree {
+  border-radius: 18px;
+  background: var(--bubble);
+  padding: 6px;
+}
+
+.kb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  text-align: left;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.kb-row svg {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+
+.kb-row:hover {
+  background: var(--hover);
+}
+
+.kb-folder-row {
+  font-weight: 500;
+}
+
+.kb-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.kb-count {
+  font-size: 12.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-chevron {
+  transition: transform 0.15s;
+}
+
+.kb-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.kb-foot {
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* Нотатка */
+
+.kb-note {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 8px 22px 120px;
+}
+
+.kb-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+
+.kb-crumbs span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.kb-title {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 0 6px;
+}
+
+.kb-meta {
+  font-size: 13.5px;
+  color: var(--text-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.kb-updated {
+  color: var(--ok);
+  font-weight: 600;
+  animation: pulse 1.2s ease-in-out 2;
+}
+
+.kb-discuss {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  margin: 14px 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.kb-discuss:hover {
+  background: var(--hover);
+}
+
+.kb-props {
+  margin: 14px 0 20px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--bubble);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kb-prop {
+  display: grid;
+  grid-template-columns: minmax(80px, 30%) 1fr;
+  gap: 10px;
+  font-size: 14px;
+  align-items: baseline;
+}
+
+.kb-prop-key {
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kb-prop-val {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kb-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kb-chip {
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.md .kb-link,
+.kb-link {
+  color: #7c3aed;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.md .kb-link:hover {
+  text-decoration: underline;
+}
+
+.kb-unresolved {
+  color: var(--text-3);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+@media (prefers-color-scheme: dark) {
+  .md .kb-link,
+  .kb-link {
+    color: #a78bfa;
+  }
+}
+
+.kb-md blockquote {
+  border-left-color: #7c3aed;
+  background: var(--bubble);
+  padding: 10px 14px;
+  border-radius: 0 12px 12px 0;
+  color: var(--text);
+}
+
+.kb-backlinks {
+  margin-top: 36px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.kb-backlinks h2 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin: 0 0 10px;
+}
+
+.kb-backlinks h2 span {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--bubble);
+}
+
+.kb-backlink {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border-radius: 16px;
+  background: var(--bubble);
+  text-align: left;
+}
+
+.kb-backlink:hover {
+  background: var(--hover);
+}
+
+.kb-backlink-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.kb-backlink-title svg {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.kb-backlink-snippet {
+  font-size: 13.5px;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Граф */
+
+.kb-graph {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.kb-graph canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.kb-legend {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.kb-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-2);
+  backdrop-filter: blur(8px);
+}
+
+.kb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+@media (max-width: 768px) {
+  .kb-note {
+    padding: 4px 18px 120px;
+  }
+  .kb-title {
+    font-size: 27px;
+  }
+  .kb-cards {
+    grid-template-columns: 1fr;
+  }
+  .kb-row {
+    min-height: 46px;
+    font-size: 16.5px;
+  }
+  .kb-search input {
+    font-size: 17px;
+  }
+}

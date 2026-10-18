@@ -1,6 +1,6 @@
 import { Check, Copy } from 'lucide-react'
 import { memo, useState, type ReactNode } from 'react'
-import ReactMarkdown, { type Components } from 'react-markdown'
+import ReactMarkdown, { type Components, defaultUrlTransform } from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
 
@@ -48,6 +48,21 @@ const components: Components = {
     )
   },
   a({ href, children }) {
+    // Посилання Hermes на нотатки Obsidian відкриваються в базі знань чату.
+    if (href?.startsWith('obsidian://')) {
+      return (
+        <a
+          href={href}
+          className="kb-link"
+          onClick={(e) => {
+            e.preventDefault()
+            window.dispatchEvent(new CustomEvent('chat:obsidian', { detail: href }))
+          }}
+        >
+          {children}
+        </a>
+      )
+    }
     return (
       <a href={href} target="_blank" rel="noreferrer noopener">
         {children}
@@ -66,7 +81,12 @@ const components: Components = {
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
     <div className="md">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+        components={components}
+        urlTransform={(url) => (url.startsWith('obsidian://') ? url : defaultUrlTransform(url))}
+      >
         {text}
       </ReactMarkdown>
     </div>

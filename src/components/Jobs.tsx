@@ -80,7 +80,7 @@ function StatusPill({ job }: { job: Job }) {
   return <span className={`pill pill-${s}`}>{STATUS_LABEL[s]}</span>
 }
 
-function TopBar({ title, back, right, sidebarOpen, openSidebar }: {
+export function TopBar({ title, back, right, sidebarOpen, openSidebar }: {
   title: string
   back?: () => void
   right?: ReactNode

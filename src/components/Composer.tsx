@@ -74,6 +74,9 @@ function ModePicker({ mode, onMode }: { mode: ChatMode; onMode: (m: ChatMode) =>
 
 const drafts = new Map<string, string>()
 
+/** Підготувати текст у полі вводу чату (напр. «Обговорити з Hermes» з бази знань). */
+export const setDraft = (key: string, text: string) => drafts.set(key, text)
+
 export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, commands, mode, onMode }: Props) {
   const [text, setText] = useState(() => drafts.get(draftKey) ?? '')
   const [files, setFiles] = useState<Pending[]>([])

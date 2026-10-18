@@ -1,7 +1,9 @@
 import { ArrowDown, Menu, PanelLeftOpen, SquarePen } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type CommandInfo, api } from './api.ts'
-import { Composer, type ComposerHandle } from './components/Composer.tsx'
+import { Composer, type ComposerHandle, setDraft } from './components/Composer.tsx'
+import { type KbRoute, KbView } from './components/Kb.tsx'
+import { kb, notePath, obsidianUriToPath } from './kb.ts'
 import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { Login } from './components/Login.tsx'
 import { Notifications } from './components/Notifications.tsx'
@@ -21,6 +23,15 @@ function jobsFromPath(): JobsRoute | null {
   if (!m[1]) return { kind: 'list' }
   return m[1] === 'new' ? { kind: 'new' } : { kind: 'job', id: m[1] }
 }
+function kbFromPath(): KbRoute | null {
+  const p = location.pathname
+  if (p === '/kb' || p === '/kb/') return { kind: 'home' }
+  if (p === '/kb/graph') return { kind: 'graph', focus: new URLSearchParams(location.search).get('focus') ?? undefined }
+  if (p.startsWith('/kb/n/')) return { kind: 'note', path: p.slice(6).split('/').map(decodeURIComponent).join('/') }
+  return null
+}
+const kbPath = (r: KbRoute) =>
+  r.kind === 'home' ? '/kb' : r.kind === 'graph' ? `/kb/graph${r.focus ? `?focus=${encodeURIComponent(r.focus)}` : ''}` : notePath(r.path)
 const jobsPath = (r: JobsRoute) => (r.kind === 'list' ? '/jobs' : r.kind === 'new' ? '/jobs/new' : `/jobs/${r.id}`)
 const isNarrow = () => matchMedia('(max-width: 768px)').matches
 
@@ -49,6 +60,8 @@ export default function App() {
   const [chats, setChats] = useState<Chat[]>([])
   const [currentId, setCurrentId] = useState<string | null>(chatIdFromPath)
   const [jobsRoute, setJobsRoute] = useState<JobsRoute | null>(jobsFromPath)
+  const [kbRoute, setKbRoute] = useState<KbRoute | null>(kbFromPath)
+  const [kbVersion, setKbVersion] = useState(0)
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [models, setModels] = useState<ModelOptions | null>(null)
   const [commands, setCommands] = useState<CommandInfo[] | null>(null)
@@ -144,6 +157,8 @@ export default function App() {
         setMessages((all) => (all[e.message.chatId] ? { ...all, [e.message.chatId]: upsert(all[e.message.chatId]!, e.message) } : all))
       } else if (e.type === 'chat') {
         setChats((c) => sortChats([...c.filter((x) => x.id !== e.chat.id), e.chat]))
+      } else if (e.type === 'kb') {
+        setKbVersion((v) => v + 1)
       } else if (e.type === 'chat-deleted') {
         setChats((c) => c.filter((x) => x.id !== e.chatId))
         if (currentRef.current === e.chatId) navigate(null, true)
@@ -158,6 +173,7 @@ export default function App() {
     const url = id ? `/c/${id}` : '/'
     if (location.pathname !== url) history[replace ? 'replaceState' : 'pushState'](null, '', url)
     setJobsRoute(null)
+    setKbRoute(null)
     setCurrentId(id)
     stick.current = true
     if (isNarrow()) setSidebar(false)
@@ -168,15 +184,43 @@ export default function App() {
     const url = jobsPath(r)
     if (location.pathname !== url) history.pushState(null, '', url)
     setJobsRoute(r)
+    setKbRoute(null)
     setCurrentId(null)
     if (isNarrow()) setSidebar(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const goKb = useCallback((r: KbRoute) => {
+    const url = kbPath(r)
+    if (location.pathname + location.search !== url) history.pushState(null, '', url)
+    setKbRoute(r)
+    setJobsRoute(null)
+    setCurrentId(null)
+    if (isNarrow()) setSidebar(false)
+  }, [])
+
+  // Посилання obsidian:// у відповідях Hermes ведуть у базу знань.
+  useEffect(() => {
+    let vaultName: string | null = null
+    const on = async (e: Event) => {
+      const href = (e as CustomEvent<string>).detail
+      try {
+        vaultName ??= (await kb.index()).name
+        const path = obsidianUriToPath(href, vaultName)
+        if (path) goKb({ kind: 'note', path })
+      } catch {
+        window.open(href, '_blank')
+      }
+    }
+    window.addEventListener('chat:obsidian', on)
+    return () => window.removeEventListener('chat:obsidian', on)
+  }, [goKb])
+
   useEffect(() => {
     const onPop = () => {
       setCurrentId(chatIdFromPath())
       setJobsRoute(jobsFromPath())
+      setKbRoute(kbFromPath())
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -208,14 +252,15 @@ export default function App() {
       history.pushState(null, '', e.data.url)
       setCurrentId(chatIdFromPath())
       setJobsRoute(jobsFromPath())
+      setKbRoute(kbFromPath())
     }
     sw.addEventListener('message', onMsg)
     return () => sw.removeEventListener('message', onMsg)
   }, [])
 
   useEffect(() => {
-    document.title = jobsRoute ? 'Розклад · Hermes' : current?.title ? `${current.title} · Hermes` : 'Hermes'
-  }, [current?.title, jobsRoute])
+    document.title = kbRoute ? 'База знань · Hermes' : jobsRoute ? 'Розклад · Hermes' : current?.title ? `${current.title} · Hermes` : 'Hermes'
+  }, [current?.title, jobsRoute, kbRoute])
 
   // ---------- Прокрутка ----------
 
@@ -407,6 +452,8 @@ export default function App() {
             onNew={newChat}
             jobsActive={Boolean(jobsRoute)}
             onJobs={() => goJobs({ kind: 'list' })}
+            onKb={() => goKb({ kind: 'home' })}
+            kbActive={Boolean(kbRoute)}
             onNotifications={() => {
               if (isNarrow()) setSidebar(false)
               setNotif(true)
@@ -436,7 +483,7 @@ export default function App() {
       <main
         className="main"
         onDragOver={(e) => {
-          if (jobsRoute || !e.dataTransfer.types.includes('Files')) return
+          if (jobsRoute || kbRoute || !e.dataTransfer.types.includes('Files')) return
           e.preventDefault()
           setDragging(true)
         }}
@@ -449,7 +496,20 @@ export default function App() {
           if (e.dataTransfer.files.length) composer.current?.addFiles(e.dataTransfer.files)
         }}
       >
-        {jobsRoute ? (
+        {kbRoute ? (
+          <KbView
+            route={kbRoute}
+            go={goKb}
+            back={() => (history.length > 1 ? history.back() : goKb({ kind: 'home' }))}
+            sidebarOpen={sidebar && !narrow}
+            openSidebar={() => setSidebar(true)}
+            version={kbVersion}
+            discuss={(note) => {
+              setDraft('new', `Нотатка «${note.title}» з бази знань (${note.path}). `)
+              navigate(null)
+            }}
+          />
+        ) : jobsRoute ? (
           <JobsView route={jobsRoute} go={goJobs} sidebarOpen={sidebar && !narrow} openSidebar={() => setSidebar(true)} flash={flash} />
         ) : (
           <>

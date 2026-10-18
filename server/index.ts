@@ -47,6 +47,7 @@ import {
 } from './hermes.ts'
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import { PasskeyError, loginOptions, loginVerify, passwordLoginAllowed, registerVerify, registrationOptions } from './passkeys.ts'
+import { getNote, graph, listNotes, resolveLink, searchNotes, vaultFile, vaultInfo, watchVault } from './vault.ts'
 import { createJob, deleteJob, getJob, jobAction, jobRuns, listJobs, runOutput, updateJob } from './jobs.ts'
 import { CHAT_INSTRUCTIONS, mimeOf, sweepUploads } from './media.ts'
 import {
@@ -598,6 +599,33 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     }
   }
 
+  // ---------- База знань (Obsidian-сховище Hermes) ----------
+  if (path.startsWith('/api/kb')) {
+    if (path === '/api/kb') return send(res, 200, { ...vaultInfo(), list: listNotes() })
+    if (path === '/api/kb/note') {
+      const note = getNote(url.searchParams.get('path') ?? '')
+      if (!note) throw new HttpError(404, 'Нотатку не знайдено')
+      return send(res, 200, note)
+    }
+    if (path === '/api/kb/search') return send(res, 200, searchNotes(url.searchParams.get('q') ?? ''))
+    if (path === '/api/kb/graph') return send(res, 200, graph())
+    if (path === '/api/kb/resolve') return send(res, 200, { path: resolveLink(url.searchParams.get('target') ?? '') })
+    if (path === '/api/kb/file') {
+      const rel = url.searchParams.get('path') ?? ''
+      const full = vaultFile(rel)
+      if (!full) throw new HttpError(404, 'Файл не знайдено')
+      const mime = rel.endsWith('.md') ? 'text/markdown; charset=utf-8' : mimeOf(rel)
+      res.writeHead(200, {
+        'Content-Type': mime.startsWith('text/') && !mime.includes('charset') ? `${mime}; charset=utf-8` : mime,
+        'Cache-Control': 'private, no-cache',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox",
+      })
+      createReadStream(full).pipe(res)
+      return
+    }
+  }
+
   if (path === '/api/commands') {
     try {
       return send(res, 200, await commandCatalog())
@@ -801,6 +829,7 @@ resumeActiveRuns()
 backfillMedia()
 sweepUploads()
 setInterval(() => sweepUploads(), 6 * 3600_000).unref()
+watchVault((paths) => emit({ type: 'kb', paths }))
 server.listen(PORT, '127.0.0.1', () => console.log(`chat: http://127.0.0.1:${PORT}${DEV ? ' (dev)' : ''}`))
 
 function shutdown() {

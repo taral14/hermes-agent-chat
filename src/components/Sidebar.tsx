@@ -1,5 +1,6 @@
 import {
   Bell,
+  BookOpen,
   CalendarClock,
   LogOut,
   MoreHorizontal,
@@ -32,6 +33,8 @@ type Props = {
   onLogout: () => void
   onJobs: () => void
   jobsActive: boolean
+  onKb: () => void
+  kbActive: boolean
   onNotifications: () => void
   onSecurity: () => void
 }
@@ -352,6 +355,12 @@ export function Sidebar(p: Props) {
                 <CalendarClock size={p.narrow ? 24 : 18} />
               </span>
               <span>Розклад</span>
+            </button>
+            <button type="button" className={`nav-row ${p.kbActive ? 'is-active' : ''}`} onClick={p.onKb}>
+              <span className="nav-icon">
+                <BookOpen size={p.narrow ? 24 : 18} />
+              </span>
+              <span>База знань</span>
             </button>
           </div>
         )}

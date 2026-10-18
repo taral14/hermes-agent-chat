@@ -147,3 +147,17 @@ export type ServerEvent =
   | { type: 'message'; message: Message }
   | { type: 'chat'; chat: Chat }
   | { type: 'chat-deleted'; chatId: string }
+  /** Hermes змінив нотатки в базі знань. */
+  | { type: 'kb'; paths: string[] }
+
+// ---------- База знань ----------
+
+export type KbNote = { path: string; title: string; folder: string; mtime: number; size: number; tags: string[] }
+
+export type KbNoteFull = KbNote & {
+  body: string
+  frontmatter: Record<string, unknown> | null
+  /** [[ціль]] → шлях нотатки або null, якщо такої ще немає. */
+  links: Record<string, string | null>
+  backlinks: { path: string; title: string; folder: string; snippet: string }[]
+}
