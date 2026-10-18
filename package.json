@@ -1,0 +1,8 @@
+{
+  "name": "chat",
+  "private": true,
+  "description": "Open WebUI на chat.example.com: веб-чат із Hermes Agent через його OpenAI-сумісний API-сервер (127.0.0.1:8642). Роутер запускає ./start.sh на своєму PORT.",
+  "scripts": {
+    "start": "exec ./start.sh"
+  }
+}
