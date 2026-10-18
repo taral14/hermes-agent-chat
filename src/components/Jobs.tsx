@@ -1,4 +1,5 @@
 import {
+  MessageSquare,
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
@@ -568,6 +569,23 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
                     <span>{status === 'paused' ? <Play size={20} /> : <Pause size={20} />}</span>
                     {status === 'paused' ? 'Продовжити' : 'Пауза'}
                   </button>
+                )}
+                {job.chatId && (
+                  <a
+                    className="job-action"
+                    href={`/c/${job.chatId}`}
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey) return
+                      e.preventDefault()
+                      history.pushState(null, '', `/c/${job.chatId}`)
+                      window.dispatchEvent(new PopStateEvent('popstate'))
+                    }}
+                  >
+                    <span>
+                      <MessageSquare size={20} />
+                    </span>
+                    Чат
+                  </a>
                 )}
                 <button type="button" className="job-action is-danger" disabled={!!busy} onClick={() => setConfirmDelete(true)}>
                   <span>

@@ -1,5 +1,5 @@
 import { ArrowDown, Menu, PanelLeftOpen, Share, SquarePen } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type CommandInfo, api } from './api.ts'
 import { Composer, type ComposerHandle, setDraft } from './components/Composer.tsx'
 import { type KbRoute, KbView } from './components/Kb.tsx'
@@ -12,7 +12,7 @@ import { Settings } from './components/Settings.tsx'
 import { SelectionAsk } from './components/SelectionAsk.tsx'
 import { ShareSheet } from './components/ShareSheet.tsx'
 import { reportPresence } from './push.ts'
-import { ActionsContext, type MessageActions, MessageView } from './components/MessageView.tsx'
+import { ActionsContext, type MessageActions, MessageView, TimeSeparator, needsTimeSeparator } from './components/MessageView.tsx'
 import { GoalBar } from './components/GoalBar.tsx'
 import { ModelPicker } from './components/ModelPicker.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
@@ -597,8 +597,11 @@ export default function App() {
             <div className="thread" ref={scroller} onScroll={onScroll}>
               <div className="thread-inner">
                 <ActionsContext.Provider value={actions}>
-                  {list?.map((m) => (
-                    <MessageView key={m.id} m={m} />
+                  {list?.map((m, i) => (
+                    <Fragment key={m.id}>
+                      {needsTimeSeparator(list[i - 1], m) && <TimeSeparator at={m.createdAt} />}
+                      <MessageView m={m} />
+                    </Fragment>
                   ))}
                 </ActionsContext.Provider>
               </div>

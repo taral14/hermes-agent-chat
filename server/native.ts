@@ -23,6 +23,7 @@ import { type GatewayEvent, GatewayError, type ServerRequest, gateway } from './
 import { defaultEffort } from './hermes.ts'
 import { chatInstructions } from './prefs.ts'
 import { deliveredContext } from './inbox.ts'
+import { jobContext } from './jobLinks.ts'
 import { promptRaised } from './push.ts'
 import {
   type Live,
@@ -200,7 +201,7 @@ async function submit(chat: ChatRow, assistant: MessageRow, user: MessageRow, te
     session_id: sessionId,
     submission_id: assistant.id,
     text,
-    api_text: apiText(text, user.attachments, deliveredContext(chat.id, user.createdAt)),
+    api_text: apiText(text, user.attachments, [jobContext(chat.id), deliveredContext(chat.id, user.createdAt)].filter(Boolean).join('\n\n')),
     ...(images.length ? { attachments: images } : {}),
     ...(model?.model ? { model_override: { model: model.model, provider: model.provider } } : {}),
   })
@@ -617,7 +618,14 @@ function streamed(m: MessageRow) {
   return tail.join('\n\n').trim()
 }
 
+let cronChanged: () => void = () => {}
+/** Hermes змінив задачі за розкладом (jobs.json): перерахувати, які чати мають задачі. */
+export function onCronChanged(fn: () => void) {
+  cronChanged = fn
+}
+
 function onEvent(e: GatewayEvent) {
+  if (e.type === 'cron.changed') return cronChanged()
   if (!e.session_id) return
   const chat = getChatBySession(e.session_id)
   if (!chat) return

@@ -1,4 +1,6 @@
 import {
+  AlarmClock,
+  Pause,
   BookOpen,
   CalendarClock,
   Check,
@@ -231,6 +233,17 @@ function ChatItem({ chat, active, narrow, lists, indent, onSelect, onRename, onP
       >
         {chat.running && <span className="running-dot" aria-label="Працює" />}
         <span className="chat-title">{chat.title || 'Новий чат'}</span>
+        {chat.jobs?.length ? (
+          chat.jobs.every((j) => !j.enabled) ? (
+            <span className="chat-job-state" title="Задачі на паузі">
+              <Pause size={12} />
+            </span>
+          ) : (
+            <span className="chat-job-state is-on" title={chat.jobs.map((j) => `${j.name}${j.schedule ? ` · ${j.schedule}` : ''}`).join('\n')}>
+              <AlarmClock size={12} />
+            </span>
+          )
+        ) : null}
       </button>
       {!narrow && (
         <button type="button" className="chat-more" aria-label="Дії" onClick={() => setMenu((m) => (m ? null : 'main'))}>
@@ -381,7 +394,9 @@ export function Sidebar(p: Props) {
     const list = q ? p.chats.filter((c) => c.title.toLowerCase().includes(q)) : p.chats
     const out: [string, Chat[]][] = []
     for (const c of list) {
-      // Без пошуку чати зі списків показуємо лише у своєму списку; закріплені — у «Закріплено».
+      // Без пошуку чати зі списків показуємо лише у своєму списку; закріплені — у «Закріплено»;
+      // чати з задачами за розкладом — у групі «Задачі».
+      if (!q && !c.pinned && c.jobs?.length) continue
       if (!q && !c.pinned && c.listId && listIds.has(c.listId)) continue
       const g = c.pinned ? 'Закріплено' : p.narrow || q ? 'Нещодавні' : groupOf(c.updatedAt)
       const last = out[out.length - 1]
@@ -412,6 +427,8 @@ export function Sidebar(p: Props) {
     />
   )
 
+  // Динамічна група: чати, куди доставляють результати задачі за розкладом (сервер стежить за Hermes).
+  const taskChats = p.chats.filter((c) => !c.pinned && c.jobs?.length)
   const pinned = groups.find(([g]) => g === 'Закріплено')
   const rest = groups.filter(([g]) => g !== 'Закріплено')
 
@@ -476,6 +493,16 @@ export function Sidebar(p: Props) {
           </div>
         )}
 
+        {!q && taskChats.length > 0 && (
+          <div className="chat-group">
+            <div className="chat-group-title group-with-icon">
+              <AlarmClock size={p.narrow ? 16 : 13} />
+              <span>Задачі</span>
+            </div>
+            {taskChats.map((c) => item(c))}
+          </div>
+        )}
+
         {!q && (
           <div className="chat-group">
             <div className="chat-group-title group-with-action">
@@ -511,7 +538,7 @@ export function Sidebar(p: Props) {
               <ListBlock
                 key={l.id}
                 list={l}
-                chats={p.chats.filter((c) => c.listId === l.id && !c.pinned)}
+                chats={p.chats.filter((c) => c.listId === l.id && !c.pinned && !c.jobs?.length)}
                 p={p}
                 closed={closedLists.has(l.id)}
                 toggle={() => toggleList(l.id)}

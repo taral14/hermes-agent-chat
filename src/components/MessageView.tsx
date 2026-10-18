@@ -29,7 +29,7 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
-import { createContext, memo, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, memo, useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { api, isPublicView, uploadUrl } from '../api.ts'
 import type { Attachment, Message, Part } from '../shared.ts'
 import { fileKind, formatSize } from '../fileKind.ts'
@@ -637,7 +637,15 @@ function splitParts(m: Message): { activity: Part[]; answer: string } {
   return { activity: parts.slice(0, i), answer }
 }
 
-/** Плашка над повідомленням, яке Hermes надіслав сам: задача за розкладом (з переходом до неї) чи send_message. */
+/** Перехід усередині застосунку без перезавантаження (App слухає popstate). */
+function go(e: ReactMouseEvent, href: string) {
+  if (e.metaKey || e.ctrlKey) return
+  e.preventDefault()
+  history.pushState(null, '', href)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
+/** Заголовок над повідомленням, яке Hermes надіслав сам: як у ChatGPT, «Назва задачі ›» веде до задачі. */
 function DeliveredBadge({ d }: { d: Extract<Part, { type: 'delivered' }> }) {
   if (d.source !== 'cron') {
     return (
@@ -649,19 +657,92 @@ function DeliveredBadge({ d }: { d: Extract<Part, { type: 'delivered' }> }) {
   }
   const href = d.jobId ? `/jobs/${d.jobId}` : '/jobs'
   return (
-    <a
-      className="msg-delivered is-link"
-      href={href}
-      onClick={(e) => {
-        if (e.metaKey || e.ctrlKey) return
-        e.preventDefault()
-        history.pushState(null, '', href)
-        window.dispatchEvent(new PopStateEvent('popstate'))
-      }}
-    >
-      <AlarmClock size={14} />
-      <span>Задача за розкладом{d.job ? ` · ${d.job}` : ''}</span>
+    <a className="msg-delivered is-job" href={href} onClick={(e) => go(e, href)}>
+      <span>{d.job || 'Задача за розкладом'}</span>
+      <ChevronRight size={16} />
     </a>
+  )
+}
+
+const JOB_ACTIONS: Record<string, string> = {
+  create: 'Задача',
+  update: 'Змінено',
+  pause: 'На паузі',
+  resume: 'Відновлено',
+  remove: 'Видалено',
+  run: 'Запущено',
+}
+
+/** Що Hermes зробив із задачами за розкладом у цій відповіді (інструмент cronjob_manage). */
+function jobActions(parts: Part[]): { action: string; id: string; name: string }[] {
+  const out = new Map<string, { action: string; id: string; name: string }>()
+  for (const p of parts) {
+    if (p.type !== 'tool' || p.tool !== 'cronjob_manage' || p.status !== 'done') continue
+    const raw = `${p.preview}\n${p.result ?? ''}`
+    const action = /\bremoved_job\b/.test(raw) ? 'remove' : (/\b(create|update|pause|resume|remove|run)\b/.exec(p.preview)?.[1] ?? (/"job_id"/.test(raw) ? 'create' : ''))
+    if (!action) continue
+    const id = /"(?:job_id|id)"\s*:\s*"([\w-]{4,})"/.exec(raw)?.[1]
+    if (!id) continue
+    let name = /"name"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(raw)?.[1] ?? ''
+    try {
+      name = JSON.parse(`"${name}"`) as string
+    } catch {
+      /* лишаємо як є */
+    }
+    out.set(id, { action, id, name: name || 'Задача за розкладом' })
+  }
+  return [...out.values()]
+}
+
+function JobChips({ parts }: { parts: Part[] }) {
+  const items = jobActions(parts)
+  if (!items.length) return null
+  return (
+    <div className="job-chips">
+      {items.map((j) => {
+        const body = (
+          <>
+            <AlarmClock size={16} />
+            <span className="job-chip-kind">{JOB_ACTIONS[j.action] ?? 'Задача'}</span>
+            <span className="job-chip-dot">·</span>
+            <span className="job-chip-name">{j.name}</span>
+          </>
+        )
+        return j.action === 'remove' ? (
+          <span key={j.id} className="job-chip is-removed">
+            {body}
+          </span>
+        ) : (
+          <a key={j.id} className="job-chip" href={`/jobs/${j.id}`} onClick={(e) => go(e, `/jobs/${j.id}`)}>
+            {body}
+          </a>
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------- Час між повідомленнями ----------
+
+const DAY = 86400_000
+const dayStart = (t: number) => new Date(new Date(t).toDateString()).getTime()
+const timeFmt = new Intl.DateTimeFormat('uk', { hour: '2-digit', minute: '2-digit' })
+const dateFmt = new Intl.DateTimeFormat('uk', { weekday: 'short', day: 'numeric', month: 'short' })
+
+/** Розділювач потрібен між повідомленнями різних днів або з перервою понад 3 години. */
+export function needsTimeSeparator(prev: Message | undefined, m: Message): boolean {
+  if (!prev) return dayStart(m.createdAt) < dayStart(Date.now())
+  return dayStart(prev.createdAt) !== dayStart(m.createdAt) || m.createdAt - prev.createdAt > 3 * 3600_000
+}
+
+export function TimeSeparator({ at }: { at: number }) {
+  const today = dayStart(Date.now())
+  const day = dayStart(at)
+  const label = day === today ? 'Сьогодні' : day === today - DAY ? 'Учора' : dateFmt.format(at)
+  return (
+    <div className="time-sep">
+      <b>{label}</b> о {timeFmt.format(at)}
+    </div>
   )
 }
 
@@ -696,6 +777,7 @@ function AssistantMessage({ m }: { m: Message }) {
           <Markdown text={answer} />
         </div>
       )}
+      {!active && <JobChips parts={m.parts} />}
       {!active && answer && <AnswerLinks text={answer} />}
       <Attachments items={m.attachments} side="assistant" />
       {m.status === 'cancelled' && <div className="msg-note">Зупинено</div>}

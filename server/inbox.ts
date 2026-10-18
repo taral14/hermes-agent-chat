@@ -24,6 +24,14 @@ export function hookTokenOk(header: string | undefined): boolean {
 const newId = () => randomBytes(9).toString('base64url')
 const HOME = 'schedule'
 
+/** Чат каналу, якщо він уже є (без створення): для прив'язки задач до чатів. */
+export function findChannelChat(channel: string): string | null {
+  const key = channel.trim() || HOME
+  if (getChat(key)) return key
+  const map = JSON.parse(getSetting('hermes_channels') ?? '{}') as Record<string, string>
+  return map[key] && getChat(map[key]) ? map[key]! : null
+}
+
 /** Чат для каналу: наявний id чату, збережена відповідність або новий чат із назвою каналу. */
 function channelChat(channel: string): string {
   const key = channel.trim() || HOME

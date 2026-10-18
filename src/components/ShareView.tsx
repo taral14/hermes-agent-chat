@@ -1,9 +1,9 @@
 import { Eye, Loader2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { api } from '../api.ts'
 import type { LinkPreview, Message, SharedChat } from '../shared.ts'
 import { PreviewContext } from './Links.tsx'
-import { MessageView } from './MessageView.tsx'
+import { MessageView, TimeSeparator, needsTimeSeparator } from './MessageView.tsx'
 
 const dateFmt = new Intl.DateTimeFormat('uk', { day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -70,8 +70,11 @@ export function ShareView({ token }: { token: string }) {
               <div className="share-meta">Знімок розмови від {dateFmt.format(data.sharedAt)}</div>
             </div>
             <PreviewContext.Provider value={resolve}>
-              {messages.map((m) => (
-                <MessageView key={m.id} m={m} />
+              {messages.map((m, i) => (
+                <Fragment key={m.id}>
+                  {needsTimeSeparator(messages[i - 1], m) && <TimeSeparator at={m.createdAt} />}
+                  <MessageView m={m} />
+                </Fragment>
               ))}
             </PreviewContext.Provider>
             <div className="share-foot">Це копія розмови з Hermes лише для читання. Відповісти чи продовжити її тут не можна.</div>

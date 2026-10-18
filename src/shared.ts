@@ -99,7 +99,12 @@ export type Chat = {
   mode: ChatMode
   /** Список, до якого користувач додав чат. */
   listId?: string | null
+  /** Задачі за розкладом, що доставляють результати в цей чат (deliver=webchat:<чат>). */
+  jobs?: ChatJob[]
 }
+
+/** Задача за розкладом, прив'язана до чату. */
+export type ChatJob = { id: string; name: string; enabled: boolean; schedule: string; nextRunAt: string | null }
 
 /** Список чатів (як проєкти в ChatGPT). */
 export type ChatList = { id: string; name: string; color: string; position: number }
@@ -138,6 +143,8 @@ export type Job = {
   script?: string | null
   skills?: string[]
   created_at?: string
+  /** Чат, куди задача доставляє результати (deliver=webchat…); рахує чат-сервер. */
+  chatId?: string | null
 }
 
 export type JobRun = {

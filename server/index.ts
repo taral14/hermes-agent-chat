@@ -59,7 +59,7 @@ import {
   insertUpload,
   listChats,
   listMessages,
-  publicChat,
+  publicChat as rawPublicChat,
   publicMessage,
   updateChat,
   createLoginSession,
@@ -103,10 +103,12 @@ import {
   nativeSend,
   nativeSteer,
   nativeStop,
+  onCronChanged,
 } from './native.ts'
 import { gateway } from './gateway.ts'
 import { VAPID_PUBLIC, hermesDelivered, jobsWatched, sendTest, setPresence } from './push.ts'
 import { hookTokenOk, receiveFromHermes } from './inbox.ts'
+import { chatForJob, jobsForChat, refreshJobLinks } from './jobLinks.ts'
 import {
   activeRunCount,
   addSteer,
@@ -518,6 +520,19 @@ function serveDownloadLink(req: IncomingMessage, res: ServerResponse, token: str
   serveFile(req, res, u, true, false)
 }
 
+/** Чат для клієнта: разом із задачами за розкладом, що доставляють у нього результати. */
+function publicChat(c: Parameters<typeof rawPublicChat>[0]) {
+  const jobs = jobsForChat(c.id)
+  return { ...rawPublicChat(c), ...(jobs.length ? { jobs } : {}) }
+}
+
+/** Перечитати прив'язку задач і оновити в клієнтів чати, де вона змінилась. */
+function syncJobLinks() {
+  void refreshJobLinks().then((changed) => {
+    for (const id of changed) emitChat(id)
+  })
+}
+
 // ---------- Спільний доступ (лише перегляд) ----------
 
 const SHARE_ACTIVE = new Set(['queued', 'running', 'stopping'])
@@ -741,6 +756,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     emit({ type: 'message', message: publicMessage(r.message) })
     emitChat(r.message.chatId)
     if (r.created) hermesDelivered(r.message)
+    syncJobLinks()
     return send(res, 200, { ok: true, message_id: r.message.id, chat_id: r.message.chatId })
   }
   if (!authed(req)) throw new HttpError(401, 'Потрібен вхід')
@@ -1169,14 +1185,15 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   // ---------- Розклад (cron-задачі Hermes) ----------
   if (path.startsWith('/api/jobs')) {
     try {
-      if (path === '/api/jobs' && method === 'GET') return send(res, 200, await listJobs())
+      if (path === '/api/jobs' && method === 'GET') return send(res, 200, (await listJobs()).map((j) => ({ ...j, chatId: chatForJob(j.id) })))
+      if (method !== 'GET') res.once('finish', syncJobLinks)
       if (path === '/api/jobs' && method === 'POST') return send(res, 200, await createJob(await readJson(req)))
       const run = path.match(/^\/api\/jobs\/runs\/([\w-]+)$/)
       if (run && method === 'GET') return send(res, 200, { output: await runOutput(run[1]!) })
       const j = path.match(/^\/api\/jobs\/([\w-]+)(?:\/(runs|pause|resume|run))?$/)
       if (j) {
         const [, id, sub] = j as unknown as [string, string, string | undefined]
-        if (!sub && method === 'GET') return send(res, 200, await getJob(id))
+        if (!sub && method === 'GET') return send(res, 200, { ...(await getJob(id)), chatId: chatForJob(id) })
         if (!sub && method === 'PATCH') return send(res, 200, await updateJob(id, await readJson(req)))
         if (!sub && method === 'DELETE') {
           await deleteJob(id)
@@ -1275,6 +1292,9 @@ if (!DEV) {
 
 loadConfig()
 initNative(emitChat)
+onCronChanged(syncJobLinks)
+syncJobLinks()
+setInterval(syncJobLinks, 2 * 60_000).unref()
 resumeActiveRuns()
 backfillMedia()
 sweepUploads()

@@ -5591,3 +5591,117 @@ button.act-line:hover:not(:disabled) {
   background: var(--hover);
   color: var(--text);
 }
+
+/* ---------- Група «Задачі» в бічній панелі ---------- */
+
+.group-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-job-state {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 6px;
+  color: var(--text-3);
+}
+
+.chat-job-state.is-on {
+  color: var(--text-2);
+}
+
+/* ---------- Задачі в розмові (як у ChatGPT) ---------- */
+
+.msg-delivered.is-job {
+  display: inline-flex;
+  gap: 2px;
+  padding: 0;
+  background: none;
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.msg-delivered.is-job:hover {
+  background: none;
+  color: var(--text);
+}
+
+.job-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.job-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 0 16px 0 13px;
+  border-radius: 999px;
+  background: var(--bubble);
+  color: var(--text);
+  font-size: 15px;
+  text-decoration: none;
+}
+
+a.job-chip:hover {
+  background: var(--hover);
+}
+
+.job-chip svg {
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.job-chip-kind {
+  color: #0a84ff;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+:root[data-scheme='dark'] .job-chip-kind {
+  color: #5eb1ff;
+}
+
+.job-chip-dot {
+  color: var(--text-3);
+}
+
+.job-chip-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.job-chip.is-removed .job-chip-kind {
+  color: var(--text-2);
+}
+
+.job-chip.is-removed .job-chip-name {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+
+.time-sep {
+  align-self: center;
+  margin: 4px 0 -8px;
+  font-size: 13.5px;
+  color: var(--text-3);
+}
+
+.time-sep b {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+a.job-action {
+  text-decoration: none;
+  color: inherit;
+}
