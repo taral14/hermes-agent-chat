@@ -33,7 +33,7 @@ import type { Attachment, Message, Part } from '../shared.ts'
 import { fileKind, formatSize } from '../fileKind.ts'
 import { AudioPlayer } from './AudioPlayer.tsx'
 import { usePrefs } from '../prefs.ts'
-import { LinkPreviews, LinkText } from './Links.tsx'
+import { AnswerLinks, LinkPreviews, LinkText } from './Links.tsx'
 import { CopyButton, Markdown } from './Markdown.tsx'
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
@@ -263,6 +263,22 @@ function ActionButton({ label, onClick, children }: { label: string; onClick: ()
   )
 }
 
+/** Цитата з відповіді Hermes на початку повідомлення («> …» рядки) окремо від самого питання. */
+function splitQuote(text: string): { quote: string; rest: string } {
+  const lines = text.split('\n')
+  let i = 0
+  while (i < lines.length && /^>\s?/.test(lines[i]!)) i++
+  if (!i) return { quote: '', rest: text }
+  return {
+    quote: lines
+      .slice(0, i)
+      .map((l) => l.replace(/^>\s?/, ''))
+      .join('\n')
+      .trim(),
+    rest: lines.slice(i).join('\n').trim(),
+  }
+}
+
 function UserMessage({ m }: { m: Message }) {
   const actions = useContext(ActionsContext)
   const [editing, setEditing] = useState(false)
@@ -276,6 +292,7 @@ function UserMessage({ m }: { m: Message }) {
     el.style.height = `${Math.min(el.scrollHeight, 320)}px`
   }, [draft, editing])
   const canEdit = Boolean(actions?.enabled && m.turn && m.text && !m.text.startsWith('/'))
+  const { quote, rest } = splitQuote(m.text)
 
   if (editing && actions) {
     return (
@@ -318,9 +335,18 @@ function UserMessage({ m }: { m: Message }) {
     <div className="msg msg-user">
       <Attachments items={m.attachments} side="user" />
       {m.text && (
-        <div className={`bubble ${m.text.startsWith('/') ? 'is-command' : ''}`}>{m.text.startsWith('/') ? m.text : <LinkText text={m.text} />}</div>
+        <div className={`bubble ${m.text.startsWith('/') ? 'is-command' : ''}`}>
+          {m.text.startsWith('/') ? (
+            m.text
+          ) : (
+            <>
+              {quote && <div className="bubble-quote">{quote}</div>}
+              {rest && <LinkText text={rest} />}
+            </>
+          )}
+        </div>
       )}
-      {m.text && !m.text.startsWith('/') && <LinkPreviews text={m.text} />}
+      {rest && !m.text.startsWith('/') && <LinkPreviews text={rest} />}
       {m.text && (
         <div className="msg-actions msg-actions-user">
           {canEdit && (
@@ -637,6 +663,7 @@ function AssistantMessage({ m }: { m: Message }) {
           <Markdown text={answer} />
         </div>
       )}
+      {!active && answer && <AnswerLinks text={answer} />}
       <Attachments items={m.attachments} side="assistant" />
       {m.status === 'cancelled' && <div className="msg-note">Зупинено</div>}
       {m.error && (

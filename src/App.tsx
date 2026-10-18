@@ -9,6 +9,7 @@ import { Login } from './components/Login.tsx'
 import { Notifications } from './components/Notifications.tsx'
 import { Security } from './components/Security.tsx'
 import { Settings } from './components/Settings.tsx'
+import { SelectionAsk } from './components/SelectionAsk.tsx'
 import { ShareSheet } from './components/ShareSheet.tsx'
 import { reportPresence } from './push.ts'
 import { ActionsContext, type MessageActions, MessageView } from './components/MessageView.tsx'
@@ -592,6 +593,7 @@ export default function App() {
           </div>
         ) : (
           <>
+            <SelectionAsk onAsk={(t) => composer.current?.insertQuote(t)} />
             <div className="thread" ref={scroller} onScroll={onScroll}>
               <div className="thread-inner">
                 <ActionsContext.Provider value={actions}>

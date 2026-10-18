@@ -17,7 +17,7 @@ import type {
   StorageInfo,
 } from '../src/shared.ts'
 import { execFileSync } from 'node:child_process'
-import { findUrls } from '../src/links.ts'
+import { answerUrls, findUrls } from '../src/links.ts'
 import { cachedPreview, unfurl } from './unfurl.ts'
 import {
   DATA_DIR,
@@ -542,7 +542,7 @@ function sharedChat(share: ShareRow): SharedChat | null {
   if (!chat) return null
   const previews: Record<string, LinkPreview> = {}
   const messages = sharedMessages(share).map((m) => {
-    if (m.role === 'user') for (const u of findUrls(m.text)) previews[u] ??= cachedPreview(u) ?? { url: u, kind: 'link', failed: true }
+    for (const u of linkTargets(m)) previews[u] ??= cachedPreview(u) ?? { url: u, kind: 'link', failed: true }
     return {
       id: m.id,
       role: m.role,
@@ -553,6 +553,13 @@ function sharedChat(share: ShareRow): SharedChat | null {
     }
   })
   return { title: chat.title || 'Чат з Hermes', sharedAt: share.updatedAt, messages, previews }
+}
+
+/** Посилання, для яких повідомлення показує картки: у питаннях — до трьох, у відповідях — відео й джерела. */
+function linkTargets(m: { role: string; text: string }): string[] {
+  if (m.role === 'user') return findUrls(m.text.replace(/^(>.*\n?)+/, ''))
+  const a = answerUrls(m.text)
+  return [...a.videos, ...a.links]
 }
 
 const escHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -931,7 +938,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
       const prev = getShareByChat(chat.id)
       const share = upsertShare(chat.id, prev?.token ?? randomBytes(18).toString('base64url'), Date.now())
       // Підтягнути картки посилань заздалегідь: глядач бачить лише те, що вже в кеші.
-      for (const m of sharedMessages(share)) if (m.role === 'user') for (const u of findUrls(m.text)) void unfurl(u).catch(() => {})
+      for (const m of sharedMessages(share)) for (const u of linkTargets(m)) void unfurl(u).catch(() => {})
       return send(res, 200, { share: shareInfo(share) })
     }
     if (method === 'DELETE') {

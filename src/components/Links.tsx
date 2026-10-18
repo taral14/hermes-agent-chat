@@ -1,7 +1,7 @@
 import { Globe, Play } from 'lucide-react'
 import { createContext, useContext, useEffect, useState } from 'react'
 import { unfurl } from '../api.ts'
-import { findUrls, splitLinks, youtubeId } from '../links.ts'
+import { answerUrls, findUrls, splitLinks, youtubeId } from '../links.ts'
 import type { LinkPreview } from '../shared.ts'
 
 /** Звідки брати картки: у чаті — із сервера, на сторінці спільного доступу — з уже готового знімка. */
@@ -145,6 +145,55 @@ export function LinkPreviews({ text }: { text: string }) {
       {urls.map((u) => (
         <Preview key={u} url={u} />
       ))}
+    </div>
+  )
+}
+
+/** Джерело у відповіді: значок сайту й домен, назва сторінки — у підказці. */
+function SourceChip({ url }: { url: string }) {
+  const resolve = useContext(PreviewContext)
+  const [p, setP] = useState<LinkPreview | null>(null)
+  const [iconOk, setIconOk] = useState(true)
+  useEffect(() => {
+    let alive = true
+    void resolve(url).then((x) => alive && setP(x))
+    return () => {
+      alive = false
+    }
+  }, [url, resolve])
+  const host = hostOf(url)
+  return (
+    <a className="source-chip" href={url} target="_blank" rel="noreferrer noopener" title={p?.title ? `${p.title}\n${url}` : url}>
+      {p?.icon && iconOk ? <img src={p.icon} alt="" referrerPolicy="no-referrer" onError={() => setIconOk(false)} /> : <Globe size={14} />}
+      <span>{p?.siteName && p.siteName.length <= 28 ? p.siteName : host}</span>
+    </a>
+  )
+}
+
+/**
+ * Посилання з відповіді Hermes: відео — картками з плеєром, одне-два посилання — картками,
+ * а три й більше (типово для досліджень) — компактним рядком «Джерела», щоб не захаращувати відповідь.
+ */
+export function AnswerLinks({ text }: { text: string }) {
+  const { videos, links, total } = answerUrls(text)
+  if (!videos.length && !links.length) return null
+  return (
+    <div className="answer-links">
+      {videos.map((u) => (
+        <Preview key={u} url={u} />
+      ))}
+      {links.length > 0 && links.length <= 2
+        ? links.map((u) => <Preview key={u} url={u} />)
+        : links.length > 2 && (
+            <div className="sources">
+              <span className="sources-label">Джерела · {total}</span>
+              <div className="sources-row">
+                {links.map((u) => (
+                  <SourceChip key={u} url={u} />
+                ))}
+              </div>
+            </div>
+          )}
     </div>
   )
 }

@@ -5453,3 +5453,119 @@ button.act-line:hover:not(:disabled) {
     font-size: 16px;
   }
 }
+
+/* ---------- Посилання у відповідях Hermes ---------- */
+
+.answer-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  width: min(100%, 420px);
+}
+
+.answer-links .yt-card,
+.answer-links .link-card {
+  width: 100%;
+}
+
+.answer-links .yt-card.is-short {
+  width: min(100%, 220px);
+}
+
+.sources {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.sources-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.sources-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 30px;
+  padding: 0 11px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.source-chip:hover {
+  background: var(--hover);
+}
+
+.source-chip img {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.source-chip span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Цитата з відповіді ---------- */
+
+.bubble-quote {
+  margin: 2px 0 8px;
+  padding: 2px 0 2px 10px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-2);
+  font-size: 0.92em;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sel-ask {
+  position: fixed;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 15px 0 12px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+  transform: translate(-50%, -100%);
+  animation: sel-pop 0.14s ease-out;
+}
+
+.sel-ask.is-below {
+  transform: translate(-50%, 0);
+}
+
+@keyframes sel-pop {
+  from {
+    opacity: 0;
+    scale: 0.92;
+  }
+}

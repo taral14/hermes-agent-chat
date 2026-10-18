@@ -61,3 +61,32 @@ export function youtubeId(url: string): { id: string; start?: number; short: boo
   const start = t ? parseTime(t) : 0
   return { id, ...(start ? { start } : {}), short: u.pathname.startsWith('/shorts/') }
 }
+
+/**
+ * Посилання з відповіді Hermes (Markdown): з [тексту](адреси) і голі, без коду.
+ * Відео YouTube окремо (до трьох), решта — до max у порядку появи.
+ */
+export function answerUrls(text: string, max = 10): { videos: string[]; links: string[]; total: number } {
+  const noCode = text.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`\n]*`/g, ' ')
+  const found: string[] = []
+  const add = (u: string) => {
+    if (u.length <= 2000 && !found.includes(u)) found.push(u)
+  }
+  // [текст](https://…) — адреса може мати одну пару дужок (Вікіпедія).
+  const rest = noCode.replace(/\[[^\]]*\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))+)\)/gi, (_m, url: string) => {
+    add(url)
+    return ' '
+  })
+  for (const u of findUrls(rest, 50)) add(u)
+  const seenVideo = new Set<string>()
+  const videos: string[] = []
+  const links: string[] = []
+  for (const u of found) {
+    const yt = youtubeId(u)
+    if (yt) {
+      if (!seenVideo.has(yt.id) && videos.length < 3) videos.push(u)
+      seenVideo.add(yt.id)
+    } else links.push(u)
+  }
+  return { videos, links: links.slice(0, max), total: links.length }
+}

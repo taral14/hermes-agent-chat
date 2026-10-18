@@ -6,7 +6,7 @@ import type { Attachment, ChatMode } from '../shared.ts'
 
 type Pending = { key: string; name: string; mime: string; preview?: string; att?: Attachment; error?: string }
 
-export type ComposerHandle = { addFiles: (files: FileList | File[]) => void; focus: () => void }
+export type ComposerHandle = { addFiles: (files: FileList | File[]) => void; focus: () => void; insertQuote: (text: string) => void }
 
 type Props = {
   ref?: Ref<ComposerHandle>
@@ -113,7 +113,28 @@ export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, comm
     }
   }
 
-  useImperativeHandle(ref, () => ({ addFiles, focus: () => area.current?.focus() }))
+  /** Цитата з відповіді: «> …» над тим, що вже набрано, курсор у кінці. */
+  const insertQuote = (quote: string) => {
+    const block = quote
+      .trim()
+      .split('\n')
+      .map((l) => `> ${l}`.trimEnd())
+      .join('\n')
+    setText((prev) => {
+      const next = `${block}\n\n${prev.replace(/^\s+/, '')}`
+      drafts.set(draftKey, next)
+      return next
+    })
+    requestAnimationFrame(() => {
+      const el = area.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+      el.scrollTop = el.scrollHeight
+    })
+  }
+
+  useImperativeHandle(ref, () => ({ addFiles, focus: () => area.current?.focus(), insertQuote }))
 
   const [menuIndex, setMenuIndex] = useState(0)
   const [menuClosed, setMenuClosed] = useState(false)
