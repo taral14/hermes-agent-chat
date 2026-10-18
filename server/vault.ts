@@ -5,10 +5,20 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import { DATA_DIR } from './db.ts'
 
-/** Шлях до сховища: VAULT_PATH, інакше OBSIDIAN_VAULT_PATH із налаштувань Hermes, інакше типове iCloud-сховище. */
+/**
+ * Шлях до сховища: VAULT_PATH; інакше дзеркало від служби vault-mirror (data/vault/<назва>), бо в сам
+ * iCloud Drive процес, запущений роутером, macOS не пускає; інакше OBSIDIAN_VAULT_PATH із налаштувань Hermes.
+ */
 function vaultPath(): string {
   if (process.env.VAULT_PATH) return process.env.VAULT_PATH
+  try {
+    const mirror = JSON.parse(readFileSync(join(DATA_DIR, 'vault', '.mirror.json'), 'utf8')) as { source?: string }
+    if (mirror.source) return join(DATA_DIR, 'vault', basename(mirror.source))
+  } catch {
+    /* служба дзеркала не встановлена */
+  }
   try {
     const env = readFileSync(join(homedir(), '.hermes', '.env'), 'utf8')
     const m = env.match(/^OBSIDIAN_VAULT_PATH=["']?([^"'\n]+)/m)
