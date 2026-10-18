@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
@@ -34,8 +34,10 @@ import {
   steerRun,
   stopRun,
 } from './hermes.ts'
+import { CHAT_INSTRUCTIONS, mimeOf } from './media.ts'
 import {
   addSteer,
+  backfillMedia,
   failMessage,
   liveMessage,
   markAnswered,
@@ -241,6 +243,7 @@ async function sendMessage(body: { chatId?: string; text?: string; attachments?:
       sessionId: chat.sessionId,
       input: await buildInput(text, attachments),
       idempotencyKey: assistant.id,
+      instructions: CHAT_INSTRUCTIONS,
       model: chat.model,
     })
     assistant.status = 'running'
@@ -386,7 +389,8 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
 
   if (path === '/api/uploads' && method === 'POST') {
     const name = decodeURIComponent(String(req.headers['x-filename'] ?? 'file')).replace(/[/\\\0]/g, '_').slice(0, 180) || 'file'
-    const mime = String(req.headers['content-type'] ?? 'application/octet-stream').split(';')[0]!.trim()
+    const sent = String(req.headers['content-type'] ?? '').split(';')[0]!.trim()
+    const mime = sent && sent !== 'application/octet-stream' ? sent : mimeOf(name)
     const data = await readBody(req, MAX_UPLOAD)
     if (!data.length) throw new HttpError(400, 'Порожній файл')
     const id = newId()
@@ -400,18 +404,43 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 
   m = path.match(/^\/api\/uploads\/([\w-]+)$/)
-  if (m && method === 'GET') {
+  if (m && (method === 'GET' || method === 'HEAD')) {
     const u = getUpload(m[1]!)
     if (!u || !existsSync(u.path)) throw new HttpError(404, 'Файл не знайдено')
-    const inline = u.mime.startsWith('image/') || u.mime === 'application/pdf'
-    res.writeHead(200, {
-      'Content-Type': u.mime,
-      'Content-Length': String(u.size),
+    const inline = /^(image|audio|video)\//.test(u.mime) || u.mime === 'application/pdf' || u.mime.startsWith('text/plain')
+    const download = url.searchParams.has('download') || !inline
+    const size = statSync(u.path).size
+    const headers: Record<string, string> = {
+      'Content-Type': u.mime === 'text/plain' ? 'text/plain; charset=utf-8' : u.mime,
+      'Accept-Ranges': 'bytes',
       'Cache-Control': 'private, max-age=31536000, immutable',
-      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(u.name)}`,
+      'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(u.name)}`,
       'X-Content-Type-Options': 'nosniff',
-    })
-    res.end(await readFile(u.path))
+    }
+    // Завантажені й згенеровані файли не мають права виконувати скрипти на нашому домені (SVG тощо).
+    // PDF лишаємо без sandbox, інакше браузер не відкриє свій переглядач.
+    if (u.mime !== 'application/pdf') {
+      headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox"
+    }
+    // Safari програє аудіо й відео лише з підтримкою Range.
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''))
+    if (range && (range[1] || range[2])) {
+      let start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]))
+      let end = range[1] && range[2] ? Number(range[2]) : size - 1
+      end = Math.min(end, size - 1)
+      if (start > end || start >= size) {
+        res.writeHead(416, { 'Content-Range': `bytes */${size}` })
+        res.end()
+        return
+      }
+      start = Math.max(0, start)
+      res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': String(end - start + 1) })
+      createReadStream(u.path, { start, end }).pipe(res)
+      return
+    }
+    res.writeHead(200, { ...headers, 'Content-Length': String(size) })
+    if (req.method === 'HEAD') return void res.end()
+    createReadStream(u.path).pipe(res)
     return
   }
 
@@ -460,6 +489,7 @@ const server = createServer(async (req, res) => {
 
 loadConfig()
 resumeActiveRuns()
+backfillMedia()
 server.listen(PORT, '127.0.0.1', () => console.log(`chat: http://127.0.0.1:${PORT}${DEV ? ' (dev)' : ''}`))
 
 function shutdown() {

@@ -175,6 +175,14 @@ export function activeMessages(): MessageRow[] {
   return db.prepare(`SELECT * FROM messages WHERE status IN ('queued','running','stopping')`).all().map(toMessage)
 }
 
+/** Завершені відповіді без вкладень, де може ховатися шлях до файлу. */
+export function answersWithoutFiles(): MessageRow[] {
+  return db
+    .prepare(`SELECT * FROM messages WHERE role = 'assistant' AND attachments = '[]' AND status = 'done' AND text LIKE '%/%'`)
+    .all()
+    .map(toMessage)
+}
+
 export function insertMessage(m: MessageRow) {
   db.prepare(
     `INSERT INTO messages (id, chat_id, role, text, attachments, parts, status, error, usage, model, run_id, last_seq, created_at, finished_at)
@@ -199,10 +207,11 @@ export function insertMessage(m: MessageRow) {
 
 export function saveMessage(m: MessageRow) {
   db.prepare(
-    `UPDATE messages SET text = ?, parts = ?, status = ?, error = ?, usage = ?, model = ?, run_id = ?, last_seq = ?, finished_at = ?
+    `UPDATE messages SET text = ?, attachments = ?, parts = ?, status = ?, error = ?, usage = ?, model = ?, run_id = ?, last_seq = ?, finished_at = ?
      WHERE id = ?`,
   ).run(
     m.text,
+    JSON.stringify(m.attachments),
     JSON.stringify(m.parts),
     m.status,
     m.error,

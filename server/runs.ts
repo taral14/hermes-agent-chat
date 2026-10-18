@@ -1,7 +1,8 @@
 // Ведення запусків Hermes: сервер сам слухає події, зберігає їх у SQLite і розсилає вкладкам.
 // Тому довга задача не залежить від відкритого браузера, а після перезапуску сервера підхоплюється знову.
 import type { Message, Part } from '../src/shared.ts'
-import { type MessageRow, activeMessages, getChat, getMessage, saveMessage, updateChat } from './db.ts'
+import { type MessageRow, activeMessages, answersWithoutFiles, getChat, getMessage, saveMessage, updateChat } from './db.ts'
+import { collectMedia } from './media.ts'
 import {
   type HermesEvent,
   HermesError,
@@ -76,6 +77,12 @@ function finish(l: Live, status: Message['status'], patch: { text?: string; erro
   }
   // Фінальна відповідь іде в text. Хвостові текстові шматки — це та сама відповідь у стрімі, прибираємо дубль.
   if (m.text) while (m.parts.length && m.parts[m.parts.length - 1]!.type === 'text') m.parts.pop()
+  // Файли, які Hermes надіслав (MEDIA:/шлях), стають вкладеннями повідомлення.
+  const media = collectMedia(m.text)
+  if (media.attachments.length) {
+    m.attachments = [...m.attachments, ...media.attachments]
+    m.text = media.text
+  }
   flush(l, true)
   updateChat(m.chatId, { touch: true })
   chatChanged(m.chatId)
@@ -344,6 +351,17 @@ export function resumeActiveRuns() {
   for (const m of activeMessages()) {
     if (m.runId) track(m)
     else failMessage(m, 'Задачу не вдалося передати Hermes.')
+  }
+}
+
+/** Старі відповіді, де Hermes лишив шлях до файлу ще до підтримки вкладень. */
+export function backfillMedia() {
+  for (const m of answersWithoutFiles()) {
+    const media = collectMedia(m.text)
+    if (!media.attachments.length) continue
+    m.attachments = media.attachments
+    m.text = media.text
+    saveMessage(m)
   }
 }
 

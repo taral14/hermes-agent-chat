@@ -6,9 +6,15 @@ import {
   CircleHelp,
   CircleX,
   Code2,
+  Download,
   Eye,
+  File as FileIcon,
+  FileArchive,
+  FileAudio,
   FilePen,
+  FileSpreadsheet,
   FileText,
+  FileVideo,
   Globe,
   ListTodo,
   Loader2,
@@ -75,25 +81,65 @@ function useNow(active: boolean) {
 
 // ---------- Користувач ----------
 
-function Attachments({ items }: { items: Attachment[] }) {
+function fileKind(mime: string, name: string): { label: string; color: string; Icon: LucideIcon } {
+  const ext = name.split('.').pop()?.toUpperCase() ?? ''
+  if (mime === 'application/pdf') return { label: 'PDF', color: '#e5484d', Icon: FileText }
+  if (mime.startsWith('audio/')) return { label: ext || 'АУДІО', color: '#8e4ec6', Icon: FileAudio }
+  if (mime.startsWith('video/')) return { label: ext || 'ВІДЕО', color: '#e54666', Icon: FileVideo }
+  if (/zip|compressed|tar|gzip/.test(mime)) return { label: ext || 'АРХІВ', color: '#6f6f6f', Icon: FileArchive }
+  if (/sheet|csv|excel/.test(mime)) return { label: ext || 'ТАБЛИЦЯ', color: '#10a37f', Icon: FileSpreadsheet }
+  if (/word|text|markdown|json|epub|presentation/.test(mime)) return { label: ext || 'ДОКУМЕНТ', color: '#0285ff', Icon: FileText }
+  return { label: ext || 'ФАЙЛ', color: '#6f6f6f', Icon: FileIcon }
+}
+
+function formatSize(n: number) {
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} КБ`
+  return `${(n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} МБ`
+}
+
+function FileCard({ a }: { a: Attachment }) {
+  const { label, color, Icon } = fileKind(a.mime, a.name)
+  return (
+    <div className="att-file">
+      <a href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file-open">
+        <span className="att-file-icon" style={{ background: color }}>
+          <Icon size={18} />
+        </span>
+        <span className="att-file-text">
+          <span className="att-file-name">{a.name}</span>
+          <span className="att-file-meta">
+            {label} · {formatSize(a.size)}
+          </span>
+        </span>
+      </a>
+      <a href={`${uploadUrl(a.id)}?download`} download={a.name} className="icon-btn" title="Завантажити" aria-label="Завантажити">
+        <Download size={16} />
+      </a>
+    </div>
+  )
+}
+
+function Attachments({ items, side }: { items: Attachment[]; side: 'user' | 'assistant' }) {
   if (!items.length) return null
   return (
-    <div className="msg-attachments">
+    <div className={`msg-attachments is-${side}`}>
       {items.map((a) =>
         a.mime.startsWith('image/') ? (
           <a key={a.id} href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-image">
             <img src={uploadUrl(a.id)} alt={a.name} loading="lazy" />
           </a>
+        ) : a.mime.startsWith('audio/') ? (
+          <div key={a.id} className="att-media att-audio">
+            <FileCard a={a} />
+            <audio controls preload="metadata" src={uploadUrl(a.id)} />
+          </div>
+        ) : a.mime.startsWith('video/') ? (
+          <div key={a.id} className="att-media att-video">
+            <video controls playsInline preload="metadata" src={uploadUrl(a.id)} />
+            <FileCard a={a} />
+          </div>
         ) : (
-          <a key={a.id} href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file">
-            <span className="att-file-icon">
-              <FileText size={18} />
-            </span>
-            <span className="att-file-text">
-              <span className="att-file-name">{a.name}</span>
-              <span className="att-file-meta">{a.mime.split('/')[1]?.toUpperCase() ?? 'ФАЙЛ'}</span>
-            </span>
-          </a>
+          <FileCard key={a.id} a={a} />
         ),
       )}
     </div>
@@ -103,7 +149,7 @@ function Attachments({ items }: { items: Attachment[] }) {
 function UserMessage({ m }: { m: Message }) {
   return (
     <div className="msg msg-user">
-      <Attachments items={m.attachments} />
+      <Attachments items={m.attachments} side="user" />
       {m.text && <div className="bubble">{m.text}</div>}
       {m.text && (
         <div className="msg-actions msg-actions-user">
@@ -374,7 +420,11 @@ function splitParts(m: Message): { activity: Part[]; answer: string } {
   let i = parts.length
   while (i > 0 && parts[i - 1]!.type === 'text') i--
   const tail = parts.slice(i) as Extract<Part, { type: 'text' }>[]
-  return { activity: parts.slice(0, i), answer: tail.map((p) => p.text).join('\n\n') }
+  const answer = tail
+    .map((p) => p.text)
+    .join('\n\n')
+    .replace(/^.*MEDIA:\S.*$/gm, '')
+  return { activity: parts.slice(0, i), answer }
 }
 
 function AssistantMessage({ m }: { m: Message }) {
@@ -396,6 +446,7 @@ function AssistantMessage({ m }: { m: Message }) {
           <Markdown text={answer} />
         </div>
       )}
+      <Attachments items={m.attachments} side="assistant" />
       {m.status === 'cancelled' && <div className="msg-note">Зупинено</div>}
       {m.error && (
         <div className="msg-error">
@@ -403,7 +454,7 @@ function AssistantMessage({ m }: { m: Message }) {
           <span>{m.error}</span>
         </div>
       )}
-      {!active && answer && (
+      {!active && (answer || m.attachments.length > 0) && (
         <div className="msg-actions">
           <CopyButton text={answer} />
           {(m.model || m.usage?.total_tokens) && (

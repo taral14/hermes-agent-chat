@@ -63,6 +63,7 @@ export type RunRequest = {
   sessionId: string
   input: InputContent
   idempotencyKey: string
+  instructions?: string
   model?: { provider: string; model: string; effort?: string } | null
 }
 
@@ -71,6 +72,7 @@ export async function startRun(req: RunRequest): Promise<string> {
     session_id: req.sessionId,
     input: typeof req.input === 'string' ? req.input : [{ role: 'user', content: req.input }],
   }
+  if (req.instructions) body.instructions = req.instructions
   if (req.model) {
     body.provider = req.model.provider
     body.model = req.model.model
