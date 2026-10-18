@@ -87,7 +87,7 @@ function useNow(active: boolean) {
 
 // ---------- Користувач ----------
 
-/** Файл на сторінці спільного доступу: просте завантаження, а файли лише з Mac mini — тільки назва. */
+/** Файл на сторінці спільного доступу: просте завантаження, а файли, що лишились на сервері, — тільки назва. */
 function PublicFileCard({ a }: { a: Attachment }) {
   const kind = fileKind(a.name, a.mime)
   const icon = (
@@ -188,7 +188,7 @@ function PrivateFileCard({ a }: { a: Attachment }) {
             {note || (
               <>
                 {kind.label} · {formatSize(a.size)}
-                {a.ref && <span className="att-ref"> · на Mac mini</span>}
+                {a.ref && <span className="att-ref"> · на сервері</span>}
               </>
             )}
           </span>

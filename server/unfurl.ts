@@ -1,7 +1,7 @@
 // Картки посилань: сервер сам читає сторінку і бере з неї заголовок, опис і картинку (Open Graph).
 // YouTube — через офіційний oEmbed. Результат кешується в базі.
 //
-// Безпека: сервер ходить у мережу від імені Mac mini, тож будь-яка адреса з повідомлення не має дістатись
+// Безпека: сервер ходить у мережу від імені свого комп'ютера, тож будь-яка адреса з повідомлення не має дістатись
 // до роутера, інших служб чи пристроїв у локальній мережі (SSRF). Приватні адреси відсікаються на рівні
 // DNS у момент з'єднання, тому підміна DNS між перевіркою і запитом теж не спрацює.
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns'
@@ -12,6 +12,7 @@ import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
 import { youtubeId } from '../src/links.ts'
 import type { LinkPreview } from '../src/shared.ts'
 import { getLinkPreview, saveLinkPreview } from './db.ts'
+import { PUBLIC_URL } from './config.ts'
 
 const PRIVATE = new BlockList()
 for (const [net, bits] of [
@@ -58,7 +59,7 @@ function safeLookup(hostname: string, options: { all?: boolean; family?: number 
   })
 }
 
-const UA = 'Mozilla/5.0 (compatible; HermesChat/1.0; +https://chat.example.com) facebookexternalhit/1.1'
+const UA = `Mozilla/5.0 (compatible; HermesChat/1.0; +${PUBLIC_URL}) facebookexternalhit/1.1`
 
 /** GET з обмеженнями: лише http(s), без приватних адрес, до 4 перенаправлень, до maxBytes, 8 с на все. */
 async function fetchLimited(url: string, accept: string, maxBytes: number, stopAt?: string, hops = 0): Promise<{ url: string; type: string; body: Buffer }> {

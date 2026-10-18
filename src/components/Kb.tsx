@@ -319,7 +319,7 @@ function Home({ go, sidebarOpen, openSidebar, version }: Props) {
             <p>{index ? `${index.name} · ${index.list.length} нотаток. Hermes пише сюди сам, усе оновлюється наживо.` : 'Завантажую сховище…'}</p>
           </div>
           {error && <div className="msg-error">{error}</div>}
-          {index && !index.available && <div className="msg-error">Сховище не знайдено на Mac mini.</div>}
+          {index && !index.available && <div className="msg-error">Сховище Obsidian не знайдено на сервері.</div>}
           <div className="kb-search">
             <Search size={18} />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Пошук у нотатках" enterKeyHint="search" />

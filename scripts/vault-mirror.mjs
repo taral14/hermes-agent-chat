@@ -4,7 +4,7 @@
 // стартує через osascript (як gateway Hermes), тому має доступ, і копіює нотатки туди, де їх читає чат.
 // Копія лише в один бік: з iCloud у чат. Видалені в сховищі файли зникають і з копії.
 //
-// Запуск: launchd-агент com.com.hermes-chat.vault-mirror (див. scripts/install-vault-mirror.sh).
+// Запуск: launchd-агент із scripts/install-vault-mirror.sh (лише macOS). Налаштування — з .env чату.
 import { existsSync, readFileSync, watch } from 'node:fs'
 import { copyFile, mkdir, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -16,7 +16,8 @@ const DATA = process.env.DATA_DIR ?? join(HERE, '..', 'data')
 function sourcePath() {
   if (process.env.VAULT_SOURCE) return process.env.VAULT_SOURCE
   try {
-    const env = readFileSync(join(homedir(), '.hermes', '.env'), 'utf8')
+    const hermesHome = (process.env.HERMES_HOME || join(homedir(), '.hermes')).replace(/^~(?=$|\/)/, homedir())
+    const env = readFileSync(join(hermesHome, '.env'), 'utf8')
     const m = env.match(/^OBSIDIAN_VAULT_PATH=["']?([^"'\n]+)/m)
     if (m) return m[1].replace(/^~/, homedir())
   } catch {

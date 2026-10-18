@@ -2,7 +2,6 @@
 // перемотування історії (повтор/редагування), відгалуження, автоматизації (/goal, /loop, /heartbeat).
 import { randomBytes, randomUUID } from 'node:crypto'
 import { copyFileSync, mkdirSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import type { Attachment, ChatControl, Message, ModelChoice, Part } from '../src/shared.ts'
 import {
@@ -22,6 +21,7 @@ import {
 import { type GatewayEvent, GatewayError, type ServerRequest, gateway } from './gateway.ts'
 import { defaultEffort } from './hermes.ts'
 import { chatInstructions } from './prefs.ts'
+import { hermesPath } from './config.ts'
 import { deliveredContext } from './inbox.ts'
 import { jobContext } from './jobLinks.ts'
 import { promptRaised } from './push.ts'
@@ -38,7 +38,7 @@ import {
   refreshTitle,
 } from './runs.ts'
 
-const IMAGE_STAGING = join(homedir(), '.hermes', 'cache', 'images')
+const IMAGE_STAGING = hermesPath('cache', 'images')
 const IMAGE_MIMES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp'])
 const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v))
 const newId = () => randomBytes(9).toString('base64url')

@@ -65,7 +65,7 @@ export function ShareSheet({ chat, onClose }: { chat: Chat; onClose: () => void 
         </div>
         <p className="sheet-lead">
           Хто має посилання, побачить цей діалог лише для читання: повідомлення, відповіді Hermes і прикріплені файли. Хід роботи Hermes і великі
-          файли, що лежать лише на Mac mini, не видно.
+          файли, що лежать лише на сервері, не видно.
         </p>
 
         {info === undefined ? (

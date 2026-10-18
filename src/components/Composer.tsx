@@ -317,7 +317,7 @@ export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, comm
           )}
         </div>
       </div>
-      <div className="composer-hint">Hermes виконує дії на Mac mini. Перевіряй важливе.</div>
+      <div className="composer-hint">Hermes виконує дії на своєму комп'ютері. Перевіряй важливе.</div>
     </div>
   )
 }

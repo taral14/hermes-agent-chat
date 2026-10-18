@@ -286,9 +286,11 @@ function Hermes({ info, models }: { info: SettingsInfo | null; models: ModelOpti
           </span>
         </div>
       </Group>
-      <Group foot="Сесії, навички, пам’ять і повні налаштування Hermes.">
-        <NavRow Icon={ExternalLink} title="Панель Hermes" hint="hermes.example.com" href="https://hermes.example.com" />
-      </Group>
+      {info?.about.panelUrl && (
+        <Group foot="Сесії, навички, пам’ять і повні налаштування Hermes.">
+          <NavRow Icon={ExternalLink} title="Панель Hermes" hint={info.about.panelUrl.replace(/^https?:\/\//, '')} href={info.about.panelUrl} />
+        </Group>
+      )}
     </>
   )
 }
@@ -378,7 +380,7 @@ function Data({ onDeletedAll }: { onDeletedAll: () => void }) {
         )}
       </Group>
 
-      <Group title="Місце на Mac mini">
+      <Group title="Місце на сервері">
         <div className="set-row">
           <span className="set-row-text">
             <span className="set-row-title">Файли в чатах</span>
@@ -466,7 +468,7 @@ function Data({ onDeletedAll }: { onDeletedAll: () => void }) {
 
 function About({ info }: { info: SettingsInfo | null }) {
   return (
-    <Group foot="Свій чат для Hermes на Mac mini: React, SQLite і рідний протокол Hermes.">
+    <Group foot="Свій чат для Hermes Agent: React, SQLite і рідний протокол Hermes.">
       <div className="set-row">
         <span className="set-row-text">
           <span className="set-row-title">Версія</span>

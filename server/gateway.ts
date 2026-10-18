@@ -1,11 +1,11 @@
 // Підключення до рідного протоколу Hermes gateway через міст bridge.py (офіційний клієнт Hermes).
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { HERMES_AGENT_DIR, HERMES_HOME, HERMES_PYTHON } from './config.ts'
 
-const HERMES = process.env.HERMES_HOME_AGENT ?? join(homedir(), '.hermes', 'hermes-agent')
-const PYTHON = join(HERMES, 'venv', 'bin', 'python')
+const HERMES = HERMES_AGENT_DIR
+const PYTHON = HERMES_PYTHON
 const BRIDGE = join(import.meta.dirname, 'bridge.py')
 
 export class GatewayError extends Error {
@@ -59,6 +59,16 @@ class Gateway {
     return this.ready
   }
 
+  /** Підняти міст, якщо він ще не працює (він стартує лише на першу дію), і сказати, чи вдалося. */
+  async check(timeoutMs = 6000): Promise<boolean> {
+    try {
+      await this.whenReady(timeoutMs)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   on(l: Partial<Listeners>) {
     this.listeners = { ...this.listeners, ...l }
   }
@@ -67,7 +77,7 @@ class Gateway {
     if (this.child || this.stopped) return
     const child = spawn(PYTHON, [BRIDGE], {
       cwd: HERMES,
-      env: { ...process.env, PYTHONPATH: HERMES, PYTHONUNBUFFERED: '1' },
+      env: { ...process.env, PYTHONPATH: HERMES, HERMES_HOME, PYTHONUNBUFFERED: '1' },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     this.child = child

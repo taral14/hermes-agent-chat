@@ -7,7 +7,7 @@ export type Attachment = {
   name: string
   mime: string
   size: number
-  /** Великий файл лишився на Mac mini (не скопійовано); віддається за шляхом через тимчасове посилання. */
+  /** Великий файл лишився на сервері (не скопійовано); віддається за шляхом через тимчасове посилання. */
   ref?: boolean
 }
 
@@ -185,7 +185,7 @@ export type ChatPrefs = {
 
 export type SettingsInfo = {
   prefs: ChatPrefs
-  about: { version: string; startedAt: number; hermes: boolean; vault: boolean }
+  about: { version: string; startedAt: number; hermes: boolean; vault: boolean; panelUrl: string }
 }
 
 export type StorageInfo = { files: number; bytes: number; macFiles: number; linkCache: number; dbBytes: number }

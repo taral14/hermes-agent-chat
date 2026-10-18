@@ -1,16 +1,15 @@
 // Клієнт до API-сервера Hermes Agent (gateway, 127.0.0.1:8642).
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { ModelOptions } from '../src/shared.ts'
+import { HERMES_URL, hermesPath } from './config.ts'
 
-const BASE = process.env.HERMES_URL ?? 'http://127.0.0.1:8642'
+const BASE = HERMES_URL
 
 /** Ключ API-сервера читаємо з ~/.hermes/.env щоразу, щоб зміна ключа не вимагала перезапуску. */
 function apiKey(): string {
   if (process.env.HERMES_API_KEY) return process.env.HERMES_API_KEY
-  const env = readFileSync(join(homedir(), '.hermes', '.env'), 'utf8')
+  const env = readFileSync(hermesPath('.env'), 'utf8')
   const m = env.match(/^API_SERVER_KEY=["']?([^"'\n]+)/m)
   if (!m) throw new Error('API_SERVER_KEY не знайдено в ~/.hermes/.env')
   return m[1]!
@@ -149,7 +148,7 @@ export async function lastAssistantText(sessionId: string): Promise<string | nul
 /** agent.reasoning_effort з ~/.hermes/config.yaml (за замовчуванням medium). */
 export function defaultEffort(): string {
   try {
-    const cfg = parseYaml(readFileSync(join(homedir(), '.hermes', 'config.yaml'), 'utf8')) as { agent?: { reasoning_effort?: unknown } }
+    const cfg = parseYaml(readFileSync(hermesPath('config.yaml'), 'utf8')) as { agent?: { reasoning_effort?: unknown } }
     const v = String(cfg?.agent?.reasoning_effort ?? '').trim()
     return v || 'medium'
   } catch {

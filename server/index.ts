@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
-import { extname, join, normalize, resolve, sep } from 'node:path'
+import { extname, join, normalize, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type {
   Attachment,
@@ -87,6 +87,7 @@ import { PasskeyError, loginOptions, loginVerify, passwordLoginAllowed, register
 import { getNote, graph, listNotes, resolveLink, searchNotes, vaultFile, vaultInfo, watchVault } from './vault.ts'
 import { createJob, deleteJob, getJob, jobAction, jobRuns, listJobs, runOutput, updateJob } from './jobs.ts'
 import { mimeOf, sweepUploads } from './media.ts'
+import { BIND_HOST, HERMES_PANEL_URL, PORT, PUBLIC_HOST, PUBLIC_URL, ROOT, ROUTER_URL } from './config.ts'
 import { chatInstructions, chatPrefs, updateChatPrefs } from './prefs.ts'
 import {
   NativeError,
@@ -123,9 +124,7 @@ import {
   track,
 } from './runs.ts'
 
-const PORT = Number(process.env.PORT ?? 5190)
 const DEV = process.env.NODE_ENV !== 'production'
-const ROOT = resolve(import.meta.dirname, '..')
 const DIST = join(ROOT, 'dist')
 const MAX_UPLOAD = 25 * 1024 * 1024
 const MAX_INLINE_IMAGE = 8 * 1024 * 1024
@@ -252,7 +251,7 @@ async function readJson<T>(req: IncomingMessage): Promise<T> {
 }
 
 /**
- * Захист від підробки запитів (CSRF). Сусідні сайти на *.example.com браузер вважає «тим самим сайтом»
+ * Захист від підробки запитів (CSRF). Сусідні сайти на тому самому домені браузер вважає «тим самим сайтом»
  * і шле їм нашу cookie, тому SameSite=Lax тут не рятує. Змінювати щось можна лише зі сторінки самого чату.
  */
 function sameOrigin(req: IncomingMessage): boolean {
@@ -467,7 +466,7 @@ const LINK_TTL = 60 * 60_000
 
 /**
  * Файл частинами (Range): аудіо й відео в Safari, докачування великих файлів. Великі файли — це оригінали на
- * Mac mini, вони читаються потоком без копіювання.
+ * сервері, вони читаються потоком без копіювання.
  */
 function serveFile(req: IncomingMessage, res: ServerResponse, u: UploadRow, forceDownload: boolean, privateCache = true) {
   const inline = /^(image|audio|video)\//.test(u.mime) || u.mime === 'application/pdf' || u.mime.startsWith('text/plain')
@@ -509,12 +508,12 @@ function serveFile(req: IncomingMessage, res: ServerResponse, u: UploadRow, forc
   stream.pipe(res)
 }
 
-/** /dl/<токен>/<назва> — тимчасове посилання без входу: завантаження великого файлу з Mac mini. */
+/** /dl/<токен>/<назва> — тимчасове посилання без входу: завантаження великого файлу з сервера. */
 function serveDownloadLink(req: IncomingMessage, res: ServerResponse, token: string) {
   const u = resolveDownloadLink(token)
   if (!u || !existsSync(u.path)) {
     res.writeHead(u ? 410 : 404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
-    res.end(u ? 'Файл переміщено або видалено з Mac mini.' : 'Посилання недійсне або його термін минув.')
+    res.end(u ? 'Файл переміщено або видалено з сервера.' : 'Посилання недійсне або його термін минув.')
     return
   }
   serveFile(req, res, u, true, false)
@@ -536,7 +535,7 @@ function syncJobLinks() {
 // ---------- Спільний доступ (лише перегляд) ----------
 
 const SHARE_ACTIVE = new Set(['queued', 'running', 'stopping'])
-const PUBLIC_ORIGIN = `https://${process.env.PUBLIC_HOST ?? 'chat.example.com'}`
+const PUBLIC_ORIGIN = PUBLIC_URL
 
 /** Повідомлення, що потрапляють у посилання: до моменту `upto`, завершені й не порожні. */
 function sharedMessages(share: ShareRow) {
@@ -551,7 +550,7 @@ function shareInfo(share: ShareRow): ShareInfo {
 
 /**
  * Знімок для глядача: лише текст і вкладення. Хід роботи Hermes (команди, шляхи, результати інструментів)
- * не показуємо, а великі файли, що лежать на Mac mini без копії, лишаються тільки назвою.
+ * не показуємо, а великі файли, що лежать на сервері без копії, лишаються тільки назвою.
  */
 function sharedChat(share: ShareRow): SharedChat | null {
   const chat = getChat(share.chatId)
@@ -630,9 +629,14 @@ async function removeChat(chat: NonNullable<ReturnType<typeof getChat>>) {
 const STARTED_AT = Date.now()
 const VERSION = (() => {
   try {
-    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, timeout: 3000 }).toString().trim()
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
   } catch {
-    return 'невідома'
+    // Не git-репозиторій (архів, копія): версія з package.json.
+    try {
+      return String((JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { version?: string }).version ?? 'невідома')
+    } catch {
+      return 'невідома'
+    }
   }
 })()
 
@@ -919,7 +923,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   if (path === '/api/settings' && method === 'GET') {
     const info: SettingsInfo = {
       prefs: chatPrefs(),
-      about: { version: VERSION, startedAt: STARTED_AT, hermes: gateway.connected, vault: (await vaultInfo()).available },
+      about: { version: VERSION, startedAt: STARTED_AT, hermes: await gateway.check(), vault: (await vaultInfo()).available, panelUrl: HERMES_PANEL_URL },
     }
     return send(res, 200, info)
   }
@@ -1168,7 +1172,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   if (m && method === 'POST') {
     const u = getUpload(m[1]!)
     if (!u) throw new HttpError(404, 'Файл не знайдено')
-    if (!existsSync(u.path)) throw new HttpError(410, 'Файл переміщено або видалено з Mac mini')
+    if (!existsSync(u.path)) throw new HttpError(410, 'Файл переміщено або видалено з сервера')
     const token = randomBytes(24).toString('base64url')
     const expiresAt = Date.now() + LINK_TTL
     createDownloadLink(token, u.id, expiresAt)
@@ -1179,7 +1183,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   if (m && (method === 'GET' || method === 'HEAD')) {
     const u = getUpload(m[1]!)
     if (!u) throw new HttpError(404, 'Файл не знайдено')
-    if (!existsSync(u.path)) throw new HttpError(410, 'Файл переміщено або видалено з Mac mini')
+    if (!existsSync(u.path)) throw new HttpError(410, 'Файл переміщено або видалено з сервера')
     return serveFile(req, res, u, url.searchParams.has('download'))
   }
   // ---------- Розклад (cron-задачі Hermes) ----------
@@ -1276,14 +1280,12 @@ const server = createServer(async (req, res) => {
   }
 })
 
-// Роутер зупиняє сервер після 30 хв без запитів. Поки Hermes працює над задачею або стежимо за розкладом,
-// стукаємо до себе через роутер, щоб не пропустити подію і пуш.
-const ROUTER = process.env.ROUTER_URL ?? 'http://127.0.0.1:8000'
-const PUBLIC_HOST = process.env.PUBLIC_HOST ?? 'chat.example.com'
-if (!DEV) {
+// Роутер (якщо чат запущено за ним) зупиняє сервер після простою. Поки Hermes працює над задачею або стежимо
+// за розкладом, стукаємо до себе через роутер, щоб не пропустити подію і пуш. Без роутера це не потрібно.
+if (!DEV && ROUTER_URL) {
   setInterval(() => {
     if (!activeRunCount() && !jobsWatched()) return
-    const r = httpRequest(`${ROUTER}/api/ping`, { headers: { Host: PUBLIC_HOST }, timeout: 10_000 }, (res) => res.resume())
+    const r = httpRequest(`${ROUTER_URL}/api/ping`, { headers: { Host: PUBLIC_HOST }, timeout: 10_000 }, (res) => res.resume())
     r.on('error', () => {})
     r.on('timeout', () => r.destroy())
     r.end()
@@ -1300,8 +1302,8 @@ backfillMedia()
 sweepUploads()
 setInterval(() => sweepUploads(), 6 * 3600_000).unref()
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`chat: http://127.0.0.1:${PORT}${DEV ? ' (dev)' : ''}`)
+server.listen(PORT, BIND_HOST, () => {
+  console.log(`chat: http://${BIND_HOST}:${PORT}${DEV ? ' (dev)' : ''} → ${PUBLIC_URL}`)
   // Сховище читаємо вже після старту: доступ до iCloud Drive не має затримувати сервер.
   void watchVault((paths) => emit({ type: 'kb', paths }))
 })

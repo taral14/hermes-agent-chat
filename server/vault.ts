@@ -6,6 +6,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { DATA_DIR } from './db.ts'
+import { IS_MAC, hermesPath } from './config.ts'
 
 /**
  * Шлях до сховища: VAULT_PATH; інакше дзеркало від служби vault-mirror (data/vault/<назва>), бо в сам
@@ -20,13 +21,14 @@ function vaultPath(): string {
     /* служба дзеркала не встановлена */
   }
   try {
-    const env = readFileSync(join(homedir(), '.hermes', '.env'), 'utf8')
+    const env = readFileSync(hermesPath('.env'), 'utf8')
     const m = env.match(/^OBSIDIAN_VAULT_PATH=["']?([^"'\n]+)/m)
     if (m) return m[1]!.replace(/^~/, homedir())
   } catch {
     /* немає .env */
   }
-  return join(homedir(), 'Library', 'Mobile Documents', 'iCloud~md~obsidian', 'Documents', 'Hermes Vault')
+  // Типове місце сховища Obsidian в iCloud (лише macOS). Інакше бази знань просто немає.
+  return IS_MAC ? join(homedir(), 'Library', 'Mobile Documents', 'iCloud~md~obsidian', 'Documents', 'Hermes Vault') : join(DATA_DIR, 'vault', 'none')
 }
 
 export const VAULT = resolve(vaultPath())

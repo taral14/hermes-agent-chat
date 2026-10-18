@@ -3,17 +3,17 @@ label: Веб-чат
 kind: platform
 version: 1.0.0
 description: >
-  Власний веб-чат на chat.example.com як адреса доставки Hermes. Лише надсилання: результати задач
+  Власний веб-чат як адреса доставки Hermes. Лише надсилання: результати задач
   за розкладом (deliver=webchat) і інструмент send_message потрапляють у чат повідомленнями з пушем.
   Розмови з чатом ідуть окремо, через рідний протокол gateway.
-author: bohdan
+author: hermes-chat
 optional_env:
   - name: WEBCHAT_URL
-    description: "Адреса хука чату (за замовчуванням через роутер: http://127.0.0.1:8000/api/hooks/hermes)"
+    description: "Адреса хука чату (за замовчуванням http://127.0.0.1:5190/api/hooks/hermes)"
     prompt: "URL хука веб-чату"
     password: false
   - name: WEBCHAT_TOKEN_FILE
-    description: "Файл із ключем хука (за замовчуванням ~/Projects/web/chat/data/.hermes-hook-token)"
+    description: "Файл із ключем хука (data/.hermes-hook-token у теці чату)"
     prompt: "Шлях до ключа"
     password: false
   - name: WEBCHAT_HOME_CHANNEL

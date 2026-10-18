@@ -1,8 +1,135 @@
-# chat.example.com — веб-чат із Hermes Agent
+# Hermes Chat — власний веб-чат для Hermes Agent
 
-Власний чат у стилі ChatGPT для Hermes на Mac mini: React на фронті, Node (`node:http`, `node:sqlite`) на бекенді.
-Hermes тут єдина «модель». Чат говорить із його API-сервером (`127.0.0.1:8642`) через Runs API,
-тому бачить хід роботи агента і може ним керувати.
+Чат у стилі ChatGPT для [Hermes Agent](https://hermes-agent.nousresearch.com): React на фронті, Node (`node:http`,
+`node:sqlite`) на бекенді, без бази даних окремо від файлу SQLite. Hermes тут єдина «модель»: чат говорить із ним
+рідним протоколом gateway, тому показує хід роботи агента, запити на дозвіл, задачі за розкладом, базу знань
+Obsidian і вміє керувати всім цим із розмови. Один користувач, вхід паролем або ключем доступу (Face ID, YubiKey).
+
+## Встановлення
+
+### Що потрібно
+
+- macOS або Linux, на тому самому комп'ютері, де працює Hermes Agent.
+- **Node 22.18+** (сервер — TypeScript, який Node виконує без збирання).
+- **Hermes Agent** зі запущеним gateway (`hermes gateway start`) і ввімкненим API-сервером:
+  у `~/.hermes/.env` має бути `API_SERVER_KEY`. Чат читає його звідти сам.
+- Для доступу з телефона — домен з HTTPS (див. нижче). Без нього чат працює на `http://localhost:5190`.
+
+### Кроки
+
+```sh
+git clone <адреса цього репозиторію> hermes-chat && cd hermes-chat
+npm ci
+cp config.example.yaml config.yaml     # логін і пароль єдиного користувача
+cp .env.example .env                   # домен, шляхи до Hermes; для першого запуску можна не чіпати
+npm run build
+npm run doctor                         # перевірить Node, Hermes, gateway, міст і підкаже, що виправити
+npm start                              # http://localhost:5190
+```
+
+Після першого входу відкрий «Налаштування → Обліковий запис → Вхід і безпека», додай ключ доступу
+(Face ID, Touch ID чи фізичний ключ) і вимкни вхід за паролем.
+
+### Доступ з телефона
+
+Чат слухає лише `127.0.0.1`. Назовні його виводить проксі з HTTPS, а в `.env` треба вказати домен:
+
+```sh
+# .env
+PUBLIC_HOST=chat.example.com
+```
+
+Найпростіше — **Cloudflare Tunnel** (без відкритих портів і білої IP). Домен має бути в Cloudflare:
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create hermes-chat
+cloudflared tunnel route dns hermes-chat chat.example.com
+cloudflared tunnel run --url http://127.0.0.1:5190 hermes-chat
+```
+
+Або будь-який зворотний проксі, наприклад Caddy: `chat.example.com { reverse_proxy 127.0.0.1:5190 }`.
+Ключі доступу прив'язуються до домену: після зміни `PUBLIC_HOST` їх треба додати заново.
+
+### Запуск як служба
+
+macOS, `~/Library/LaunchAgents/com.example.hermes-chat.plist` (заміни шляхи):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.example.hermes-chat</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/npm</string>
+    <string>start</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/you/hermes-chat</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/you/Library/Logs/hermes-chat.log</string>
+  <key>StandardErrorPath</key><string>/Users/you/Library/Logs/hermes-chat.log</string>
+</dict>
+</plist>
+```
+
+`launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.hermes-chat.plist`
+
+Linux, `~/.config/systemd/user/hermes-chat.service`:
+
+```ini
+[Service]
+WorkingDirectory=%h/hermes-chat
+ExecStart=/usr/bin/npm start
+Restart=always
+[Install]
+WantedBy=default.target
+```
+
+`systemctl --user enable --now hermes-chat` (і `loginctl enable-linger $USER`, щоб працювало без входу).
+
+### Hermes пише в чат сам (необов'язково)
+
+Щоб результати задач за розкладом і повідомлення `send_message` приходили в чат, постав плагін для Hermes:
+
+```sh
+npm run setup:hermes        # чат має бути хоч раз запущений: він створює ключ
+hermes gateway restart      # коли Hermes нічого не робить
+hermes send -t webchat:Тест "привіт"
+```
+
+Скрипт копіює `hermes-plugin/webchat` у `~/.hermes/plugins/` і пише поруч `config.json` з адресою й ключем чату.
+
+### База знань Obsidian (необов'язково)
+
+Чат показує сховище з `OBSIDIAN_VAULT_PATH` у `.env` Hermes (або `VAULT_PATH` у `.env` чату).
+На macOS служба не має доступу до iCloud Drive, тому для сховища в iCloud постав дзеркало:
+`npm run setup:vault-mirror`. Воно копіює нотатки в `data/vault/` і стежить за змінами.
+
+### Оновлення
+
+```sh
+git pull && npm ci && npm run build   # потім перезапусти службу
+```
+
+### Налаштування (`.env`)
+
+| Змінна | За замовчуванням | Навіщо |
+|---|---|---|
+| `PUBLIC_HOST` | `localhost` | Домен чату: ключі доступу, посилання «Поділитися», пуші, текст для Hermes |
+| `PORT`, `BIND_HOST` | `5190`, `127.0.0.1` | Де слухає сервер |
+| `HERMES_HOME` | `~/.hermes` | Тека Hermes: `.env`, `config.yaml`, кеш |
+| `HERMES_AGENT_DIR`, `HERMES_PYTHON` | з `HERMES_HOME` | Код Hermes і його Python для мосту до gateway |
+| `HERMES_URL` | `http://127.0.0.1:8642` | API-сервер Hermes |
+| `HERMES_PANEL_URL` | — | Посилання на панель Hermes у налаштуваннях |
+| `DATA_DIR` | `./data` | База, файли, ключі сесій і пушів |
+| `VAULT_PATH` | з `.env` Hermes | Сховище Obsidian |
+| `ROUTER_URL` | — | Лише якщо чат запускає роутер, що зупиняє сайти після простою |
+| `VAPID_SUBJECT` | адреса чату | Контакт для служб пушів |
 
 ## Що вміє
 
@@ -11,9 +138,9 @@ Hermes тут єдина «модель». Чат говорить із його
   коментарі агента між кроками, помічники (сабагенти). Після завершення хід згортається в «Працював N с · K дій».
 - Запити Hermes на дозвіл (небезпечні команди) і на уточнення приходять у чат картками з кнопками.
 - Зупинка задачі і доповнення задачі на ходу (steer): поки Hermes працює, текст із поля вводу йде йому як уточнення.
-- Файли від тебе: картинки передаються моделі напряму, а будь-які файли (PDF тощо) зберігаються на mini,
+- Файли від тебе: картинки передаються моделі напряму, а будь-які файли (PDF тощо) зберігаються на сервері,
   і Hermes отримує шлях, щоб відкрити їх своїми інструментами.
-- Великі файли (від 25 МБ) не копіюються: чат пам'ятає шлях до оригіналу на Mac mini. «Завантажити» створює
+- Великі файли (від 25 МБ) не копіюються: чат пам'ятає шлях до оригіналу на сервері. «Завантажити» створює
   тимчасове посилання `/dl/<токен>/<назва>` на 1 годину (без входу, з докачуванням), «Копіювати посилання» дає
   його для іншого пристрою. Чистка ніколи не видаляє оригінали. Тип файлу визначається за розширенням (`src/fileKind.ts`).
 - Списки чатів (як проєкти): «Списки» в бічній панелі, переміщення через меню чату, новий чат у списку.
@@ -58,7 +185,7 @@ Hermes тут єдина «модель». Чат говорить із його
 `~/.hermes/.env`). Лише читання: Hermes пише, ми бачимо.
 
 Сховище лежить в iCloud Drive, а процес, запущений роутером, macOS туди не пускає. Тому окрема служба
-`com.com.hermes-chat.vault-mirror` (стартує через `osascript`, як gateway Hermes) дзеркалить сховище в
+(`npm run setup:vault-mirror`, стартує через `osascript`, як gateway Hermes) дзеркалить сховище в
 `data/vault/<назва>`, і чат читає копію. Встановити або оновити: `scripts/install-vault-mirror.sh`;
 журнал: `~/Library/Logs/chat-vault-mirror.log`. Можна задати шлях і напряму через `VAULT_PATH`.
 - `[[вікі-посилання]]` (з псевдонімами й заголовками) розв'язуються як в Obsidian: за назвою файлу,
@@ -80,7 +207,7 @@ Hermes тут єдина «модель». Чат говорить із його
 ## Як це влаштовано
 
 - Кожен чат — це окрема сесія Hermes з id `webchat-<id чату>`. Історію розмови тримає Hermes,
-  ми надсилаємо лише нове повідомлення. Ці сесії видно і в панелі Hermes (hermes.example.com → Сесії).
+  ми надсилаємо лише нове повідомлення. Ці сесії видно і в панелі Hermes (панель Hermes → Сесії).
 - Задачу веде сервер, а не браузер: він слухає події запуску, пише їх у SQLite і розсилає вкладкам через
   `/api/events` (SSE). Можна закрити вкладку посеред довгого ресерчу і повернутися пізніше.
 - Якщо роутер зупинив сервер через простій, при наступному старті незавершені задачі підхоплюються:
@@ -95,7 +222,7 @@ Hermes тут єдина «модель». Чат говорить із його
 Ключі доступу (Face ID / Touch ID / менеджер паролів) і фізичні ключі (YubiKey через USB, NFC, Bluetooth)
 додаються в «Вхід і безпека» (щит у бічній панелі). Там само можна вимкнути вхід за паролем — тоді
 увійти можна лише з ключем. Якщо всі ключі загублено, додай `allow_password: true` у `config.yaml`.
-Ключі прив'язані до домену chat.example.com (для розробки — localhost). Дані: таблиця `passkeys`.
+Ключі прив'язані до домену з `PUBLIC_HOST` (для розробки — localhost). Дані: таблиця `passkeys`.
 
 Користувач один. Логін і пароль лежать у `config.yaml` поруч із `package.json` (не в git):
 
@@ -152,21 +279,21 @@ Hermes бачить чат як ще один месенджер через пл
   (до трьох): заголовок, опис і картинка сторінки (Open Graph). YouTube показує обкладинку, назву й канал
   (oEmbed) і грає просто в чаті через youtube-nocookie.com, з таймкодом з `t=`. Сторінки читає сервер
   (`server/unfurl.ts`), кеш — таблиця `link_previews` (7 днів, невдалі спроби — година). Адреси в приватній
-  мережі (роутер, служби Mac mini, локальна мережа) сервер не відкриває: перевірка в DNS у момент з'єднання.
+  мережі (роутер, інші служби комп'ютера, локальна мережа) сервер не відкриває: перевірка в DNS у момент з'єднання.
 - **Посилання у відповідях Hermes.** Відео YouTube — картками з плеєром (до трьох). Одне-два посилання —
   картками, три й більше — рядком «Джерела» зі значками сайтів, щоб не захаращувати дослідження.
   Посилання з коду не беруться (`answerUrls` у `src/links.ts`).
 - **Запитати про виділене.** Виділяєш шматок відповіді — з'являється «Запитати Hermes» (на телефоні під
   текстом, бо над ним системне меню). Цитата йде в поле вводу як `> …`, у бульбашці показується окремим блоком.
-- **Поділитися.** Кнопка «Поділитися» вгорі чату дає посилання `chat.example.com/s/<токен>` лише для перегляду.
+- **Поділитися.** Кнопка «Поділитися» вгорі чату дає посилання `<домен чату>/s/<токен>` лише для перегляду.
   Це знімок до моменту створення: нові повідомлення з'являться там, лише коли натиснеш «Оновити».
   Глядач бачить текст, відповіді й прикріплені файли цього чату; хід роботи Hermes і великі файли, що
-  лежать лише на Mac mini, не видно. Сторінка без входу, з `noindex`. Видалив посилання — воно перестає
+  лежать лише на сервері, не видно. Сторінка без входу, з `noindex`. Видалив посилання — воно перестає
   працювати одразу. Таблиця `shares`; маршрути `/api/chats/:id/share` і публічний `/api/public/share/:токен`.
 
 ## Безпека
 
-- **Підробка запитів (CSRF).** Сусідні сайти на `*.example.com` браузер вважає «тим самим сайтом» і шле їм
+- **Підробка запитів (CSRF).** Сусідні піддомени того самого домену браузер вважає «тим самим сайтом» і шле їм
   нашу cookie, тому `SameSite=Lax` не рятує. Сервер відхиляє будь-який запит, що щось змінює, якщо
   `Origin` чи `Sec-Fetch-Site` вказують на іншу сторінку, а JSON приймає лише з `Content-Type: application/json`.
 - **Сторінка** віддається з CSP (лише свої скрипти), `frame-ancestors 'none'` і `X-Frame-Options: DENY`.

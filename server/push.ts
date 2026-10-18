@@ -3,11 +3,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import webpush from 'web-push'
 import type { Job, Message, Part } from '../src/shared.ts'
+import { VAPID_SUBJECT } from './config.ts'
 import { DATA_DIR, type PushSub, deletePushSub, getChat, listPushSubs } from './db.ts'
 import { jobRuns, listJobs, runOutput } from './jobs.ts'
 
 const VAPID_FILE = join(DATA_DIR, '.vapid.json')
-const PUBLIC_URL = process.env.PUBLIC_URL ?? 'https://chat.example.com'
 
 type Keys = { publicKey: string; privateKey: string }
 function vapid(): Keys {
@@ -15,7 +15,7 @@ function vapid(): Keys {
   return JSON.parse(readFileSync(VAPID_FILE, 'utf8')) as Keys
 }
 const keys = vapid()
-webpush.setVapidDetails(PUBLIC_URL, keys.publicKey, keys.privateKey)
+webpush.setVapidDetails(VAPID_SUBJECT, keys.publicKey, keys.privateKey)
 export const VAPID_PUBLIC = keys.publicKey
 
 export type Payload = {

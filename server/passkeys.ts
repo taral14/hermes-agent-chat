@@ -17,10 +17,11 @@ import {
   setSetting,
   touchPasskey,
 } from './db.ts'
+import { PUBLIC_HOST } from './config.ts'
 
 const RP_NAME = 'Hermes'
 /** Домени, для яких дозволені ключі. localhost — для розробки. */
-const RP_IDS = new Set([process.env.PUBLIC_HOST ?? 'chat.example.com', 'localhost'])
+const RP_IDS = new Set([PUBLIC_HOST, 'localhost'])
 
 export class PasskeyError extends Error {}
 
@@ -28,7 +29,7 @@ export class PasskeyError extends Error {}
 export function relyingParty(req: IncomingMessage): { rpID: string; origin: string } {
   const host = String(req.headers.host ?? '')
   const rpID = host.split(':')[0]!.toLowerCase()
-  if (!RP_IDS.has(rpID)) throw new PasskeyError('Ключі доступу працюють лише на chat.example.com')
+  if (!RP_IDS.has(rpID)) throw new PasskeyError(`Ключі доступу працюють лише на ${PUBLIC_HOST}`)
   const secure = req.headers['x-forwarded-proto'] === 'https' || Boolean(req.headers['cf-connecting-ip']) || rpID !== 'localhost'
   return { rpID, origin: `${secure ? 'https' : 'http'}://${host}` }
 }

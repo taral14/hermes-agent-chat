@@ -1,13 +1,19 @@
-"""Веб-чат (chat.example.com) як адреса доставки Hermes: задачі за розкладом і send_message.
+"""Веб-чат як адреса доставки Hermes: задачі за розкладом і send_message.
 
-Лише надсилання. Hermes передає текст і файли, плагін шле їх POST-ом на хук чату через роутер
-(роутер сам розбудить чат, якщо той заснув). Ключ лежить у файлі чату, тож у ~/.hermes/.env нічого
-додавати не треба. Канал (chat_id) — назва чату в веб-чаті: «schedule» стає чатом «Розклад».
+Лише надсилання. Hermes передає текст і файли, плагін шле їх POST-ом на хук чату. Розмови з чатом
+ідуть окремо, через рідний протокол gateway. Канал (chat_id) — чат у веб-чаті: «schedule» стає
+чатом «Розклад», будь-яка інша назва — чатом із такою назвою.
 
-Env (усе необов'язкове): WEBCHAT_URL, WEBCHAT_HOST, WEBCHAT_TOKEN_FILE, WEBCHAT_HOME_CHANNEL.
+Налаштування (від сильнішого до слабшого): змінні WEBCHAT_* у ~/.hermes/.env → config.json поруч
+із цим файлом (його пише scripts/install-hermes-plugin.sh чату) → значення за замовчуванням.
+  url         адреса хука, за замовчуванням http://127.0.0.1:5190/api/hooks/hermes
+  host        заголовок Host, якщо чат стоїть за роутером, що розрізняє сайти за Host
+  token_file  файл із ключем хука (data/.hermes-hook-token у теці чату)
+  home        канал за замовчуванням (schedule)
 """
 
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
@@ -31,25 +37,43 @@ HOME = "schedule"
 MAX_MESSAGE_LENGTH = 100_000  # чат рендерить Markdown і не має ліміту месенджерів
 
 
-def _setting(env: str, default: str) -> str:
-    return (_get_scoped_secret(env, "") or "").strip() or default
+_CONFIG_FILE = Path(__file__).with_name("config.json")
+
+
+def _file_config() -> dict:
+    try:
+        data = json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _setting(env: str, key: str, default: str) -> str:
+    return (_get_scoped_secret(env, "") or "").strip() or str(_file_config().get(key) or "").strip() or default
 
 
 def _url() -> str:
-    return _setting("WEBCHAT_URL", "http://127.0.0.1:8000/api/hooks/hermes")
+    return _setting("WEBCHAT_URL", "url", "http://127.0.0.1:5190/api/hooks/hermes")
 
 
 def _host() -> str:
-    return _setting("WEBCHAT_HOST", "chat.example.com")
+    return _setting("WEBCHAT_HOST", "host", "")
+
+
+def _home() -> str:
+    return _setting("WEBCHAT_HOME_CHANNEL", "home", HOME)
 
 
 def _token_file() -> Path:
-    return Path(os.path.expanduser(_setting("WEBCHAT_TOKEN_FILE", "~/Projects/web/chat/data/.hermes-hook-token")))
+    return Path(os.path.expanduser(_setting("WEBCHAT_TOKEN_FILE", "token_file", "")))
 
 
 def _token() -> str:
+    path = _token_file()
+    if not str(path) or str(path) == ".":
+        return ""
     try:
-        return _token_file().read_text(encoding="utf-8").strip()
+        return path.read_text(encoding="utf-8").strip()
     except OSError:
         return ""
 
@@ -70,9 +94,11 @@ async def _post(channel: str, text: str, media: Optional[list[str]] = None) -> d
         return send_error("webchat: httpx не встановлено")
     token = _token()
     if not token:
-        return send_error(f"webchat: немає ключа у {_token_file()}")
-    payload = {"channel": channel or HOME, "text": text or "", "media": media or []}
-    headers = {"Authorization": f"Bearer {token}", "Host": _host(), "Content-Type": "application/json"}
+        return send_error("webchat: немає ключа хука — запусти scripts/install-hermes-plugin.sh у теці чату")
+    payload = {"channel": channel or _home(), "text": text or "", "media": media or []}
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    if _host():
+        headers["Host"] = _host()
     last = ""
     for attempt in range(3):
         try:
@@ -109,7 +135,7 @@ class WebchatAdapter(BasePlatformAdapter):
             logger.warning("[%s] httpx не встановлено", self.name)
             return False
         if not _token():
-            logger.warning("[%s] немає ключа хука у %s", self.name, _token_file())
+            logger.warning("[%s] немає ключа хука — запусти scripts/install-hermes-plugin.sh у теці чату", self.name)
             return False
         self._mark_connected()
         logger.info("[%s] Готовий надсилати в %s", self.name, _url())
@@ -155,7 +181,7 @@ class WebchatAdapter(BasePlatformAdapter):
         return None
 
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
-        name = "Розклад" if (chat_id or HOME) == HOME else chat_id
+        name = "Розклад" if (chat_id or _home()) == HOME else chat_id
         return {"name": name, "type": "dm", "chat_id": chat_id}
 
 
@@ -175,7 +201,7 @@ def _target_ref(ref: str):
 
 def _env_enablement() -> dict:
     """Плагін увімкнений без жодних змінних: канал за замовчуванням — «Розклад»."""
-    return {"home_channel": {"chat_id": _setting("WEBCHAT_HOME_CHANNEL", HOME), "name": "Розклад"}}
+    return {"home_channel": {"chat_id": _home(), "name": "Розклад"}}
 
 
 def _check() -> bool:
@@ -195,7 +221,7 @@ def register(ctx) -> None:
         check_fn=_check,
         is_connected=_is_connected,
         target_ref_syntax_fn=_target_ref,
-        dashboard_description="Власний веб-чат chat.example.com: доставка результатів задач і send_message.",
+        dashboard_description="Власний веб-чат для Hermes: доставка результатів задач і send_message.",
         env_enablement_fn=_env_enablement,
         cron_deliver_env_var="WEBCHAT_HOME_CHANNEL",
         standalone_sender_fn=_standalone_send,
@@ -204,7 +230,7 @@ def register(ctx) -> None:
         pii_safe=True,
         allow_update_command=False,
         platform_hint=(
-            "The webchat platform is the user's private web chat (chat.example.com). It renders Markdown, "
+            "The webchat platform is the user's private web chat. It renders Markdown, "
             "tables and code, and shows audio, video, images and files from MEDIA: lines as players and cards. "
             "Use target 'webchat' for the default 'Розклад' chat, or 'webchat:<name>' for a chat with that name."
         ),

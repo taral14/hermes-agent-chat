@@ -193,7 +193,7 @@ export function Security({ onClose }: { onClose: () => void }) {
               </button>
             </label>
             {!state.passwordLogin && (
-              <p className="notif-foot">Якщо загубиш усі ключі: додай рядок allow_password: true у chat/config.yaml на Mac mini.</p>
+              <p className="notif-foot">Якщо загубиш усі ключі: додай рядок allow_password: true у config.yaml чату на сервері.</p>
             )}
 
             <div className="sec-label">Де виконано вхід</div>

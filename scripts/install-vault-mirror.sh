@@ -1,16 +1,19 @@
 #!/bin/sh
-# Встановлює launchd-агента, який дзеркалить Obsidian-сховище Hermes (iCloud Drive) у chat/data/vault.
-# Агент стартує через osascript, як gateway Hermes: так macOS пускає його в iCloud Drive.
-# Повторний запуск оновлює агента. Видалити:
-#   launchctl bootout gui/$(id -u)/com.com.hermes-chat.vault-mirror
-#   rm ~/Library/LaunchAgents/com.com.hermes-chat.vault-mirror.plist
+# Лише macOS. Встановлює launchd-агента, який дзеркалить Obsidian-сховище Hermes (iCloud Drive) у data/vault.
+# Потрібен, бо процес чату, запущений як служба, macOS не пускає в iCloud Drive. Агент стартує через
+# osascript, як gateway Hermes: так macOS пускає його туди.
+# Налаштування беруться з .env чату (VAULT_MIRROR_LABEL, HERMES_HOME, DATA_DIR). Повторний запуск оновлює агента.
+# Видалити:
+#   launchctl bootout gui/$(id -u)/<label>
+#   rm ~/Library/LaunchAgents/<label>.plist
 set -eu
-LABEL=com.com.hermes-chat.vault-mirror
 DIR=$(cd "$(dirname "$0")/.." && pwd)
-NODE=${NODE:-$HOME/.hermes/node/bin/node}
+if [ -f "$DIR/.env" ]; then set -a; . "$DIR/.env"; set +a; fi
+LABEL=${VAULT_MIRROR_LABEL:-com.hermes-chat.vault-mirror}
+NODE=${NODE:-$(command -v node)}
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/chat-vault-mirror.log"
-CMD="exec '$NODE' '$DIR/scripts/vault-mirror.mjs' >> '$LOG' 2>&1"
+CMD="exec '$NODE' --env-file-if-exists='$DIR/.env' '$DIR/scripts/vault-mirror.mjs' >> '$LOG' 2>&1"
 JS="ObjC.import(\"stdlib\"); const status=\$.system(\"$CMD\"); \$.exit(status === -1 ? 1 : (status >> 8) & 255);"
 
 cat > "$PLIST" <<PLIST

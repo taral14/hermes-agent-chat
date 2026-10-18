@@ -4,7 +4,10 @@ import { constants, copyFileSync, existsSync, mkdirSync, realpathSync, rmSync, s
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import type { Attachment } from '../src/shared.ts'
-import { UPLOAD_DIR, deleteUploadRow, insertUpload, orphanUploads } from './db.ts'
+import { DATA_DIR, UPLOAD_DIR, deleteUploadRow, insertUpload, orphanUploads } from './db.ts'
+import { HERMES_HOME, PUBLIC_HOST } from './config.ts'
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Більші файли не копіюємо: зберігаємо шлях і віддаємо оригінал за тимчасовим посиланням. */
 const REF_FROM = 25 * 1024 * 1024
@@ -86,7 +89,7 @@ export const mimeOf = (name: string) => MIME[extname(name).toLowerCase()] ?? 'ap
 
 /** Те, що Hermes каже про файли в чаті. Додається до системного промпта кожного запуску. */
 export const CHAT_INSTRUCTIONS = [
-  'You are talking to the user through their private web chat (chat.example.com), which renders Markdown.',
+  `You are talking to the user through their private web chat (${PUBLIC_HOST}), which renders Markdown.`,
   'To deliver a file to the user (audio you synthesized, an image, video, PDF, document, archive, anything),',
   'put a line `MEDIA:/absolute/path/to/file` in your final answer, one line per file. The chat attaches the file',
   'to your message: audio and video get a player, images a preview, other files a download card.',
@@ -115,7 +118,8 @@ const DENY = [
   /\/\.hermes\/(\.env|\.api_server_key|auth\.json|google_(client_secret|token)\.json|config\.yaml|pairing\/|platforms\/)/i,
   /\/\.codex\/(auth\.json|config\.toml)/i,
   /\/\.claude(\.json|\/\.credentials)/i,
-  /\/chat\/data\/(\.session-secret|\.vapid\.json|chat\.db)/i,
+  new RegExp(`^${escapeRe(resolve(DATA_DIR))}/(\\.session-secret|\\.vapid\\.json|\\.hermes-hook-token|chat\\.db)`, 'i'),
+  new RegExp(`^${escapeRe(HERMES_HOME)}/(\\.env|\\.api_server_key|auth\\.json|google_(client_secret|token)\\.json|config\\.yaml|pairing/|platforms/)`, 'i'),
   /\/Library\/Keychains\//i,
   /\/Library\/Cookies\//i,
   /\/Library\/Containers\/com\.apple\.Safari\//i,

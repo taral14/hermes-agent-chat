@@ -3,11 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Веб-чат із Hermes Agent на chat.example.com (React + Node + SQLite).",
+  "description": "Власний веб-чат для Hermes Agent: React, Node і SQLite, рідний протокол Hermes.",
   "scripts": {
-    "dev": "node --disable-warning=ExperimentalWarning server/index.ts",
+    "dev": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/index.ts",
     "build": "tsc -b && vite build",
-    "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.ts",
+    "start": "NODE_ENV=production node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/index.ts",
+    "doctor": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/doctor.ts",
+    "setup:hermes": "sh scripts/install-hermes-plugin.sh",
+    "setup:vault-mirror": "sh scripts/install-vault-mirror.sh",
     "lint": "oxlint"
   },
   "engines": {
