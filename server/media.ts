@@ -94,6 +94,8 @@ export const CHAT_INSTRUCTIONS = [
   'Any size is fine (even many GB): large files are not copied, the user downloads the original by a temporary link,',
   'so never compress, split or move a file just to send it. Point MEDIA: at the file where it already is.',
   'Files the user attaches are saved on this Mac and listed with absolute paths in their message.',
+  'When you create or mention a note in the Obsidian vault, refer to it by its path from the vault root in backticks',
+  '(e.g. `Gaming/Note name.md`) or as [[Note name]]: the chat turns it into a clickable note card.',
 ].join(' ')
 
 const HOME = homedir()

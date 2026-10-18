@@ -3,7 +3,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { type CommandInfo, api } from './api.ts'
 import { Composer, type ComposerHandle, setDraft } from './components/Composer.tsx'
 import { type KbRoute, KbView } from './components/Kb.tsx'
-import { kb, notePath, obsidianUriToPath } from './kb.ts'
+import { invalidateNoteIndex, kb, notePath, obsidianUriToPath } from './kb.ts'
 import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { Login } from './components/Login.tsx'
 import { Notifications } from './components/Notifications.tsx'
@@ -180,6 +180,7 @@ export default function App() {
         setLists(e.lists)
       } else if (e.type === 'kb') {
         setKbVersion((v) => v + 1)
+        invalidateNoteIndex()
       } else if (e.type === 'chat-deleted') {
         setChats((c) => c.filter((x) => x.id !== e.chatId))
         if (currentRef.current === e.chatId) navigate(null, true)
@@ -234,7 +235,13 @@ export default function App() {
       }
     }
     window.addEventListener('chat:obsidian', on)
-    return () => window.removeEventListener('chat:obsidian', on)
+    // Згадка нотатки у відповіді Hermes (шлях чи [[назва]]), уже знайдена в базі знань.
+    const onNote = (e: Event) => goKb({ kind: 'note', path: (e as CustomEvent<string>).detail })
+    window.addEventListener('chat:kbnote', onNote)
+    return () => {
+      window.removeEventListener('chat:obsidian', on)
+      window.removeEventListener('chat:kbnote', onNote)
+    }
   }, [goKb])
 
   useEffect(() => {

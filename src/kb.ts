@@ -1,4 +1,5 @@
 // База знань на клієнті: запити й перетворення Obsidian-розмітки в звичайний Markdown.
+import { useEffect, useSyncExternalStore } from 'react'
 import type { KbNote, KbNoteFull } from './shared.ts'
 
 async function get<T>(path: string): Promise<T> {
@@ -71,4 +72,97 @@ export function obsidianUriToPath(href: string, vaultName: string): string | nul
   } catch {
     return null
   }
+}
+
+// ---------- Згадки нотаток у відповідях Hermes ----------
+// Hermes пише «Створено: Gaming/Назва.md» чи [[Назва]]. Якщо така нотатка є в базі знань, згадка стає
+// карткою нотатки, що відкриває її в чаті. Індекс нотаток вантажимо лише коли в тексті є щось схоже.
+
+let index: KbNote[] | null = null
+let loadedAt = 0
+let loading: Promise<void> | null = null
+const listeners = new Set<() => void>()
+
+export function loadNoteIndex(maxAgeMs = 60_000) {
+  if (loading || (index && Date.now() - loadedAt < maxAgeMs)) return
+  loading = kb
+    .index()
+    .then((r) => {
+      index = r.available ? r.list : []
+    })
+    .catch(() => {
+      index = index ?? [] // немає доступу (сторінка спільного чату) — просто без карток
+    })
+    .finally(() => {
+      loadedAt = Date.now()
+      loading = null
+      for (const l of listeners) l()
+    })
+}
+
+/** Hermes змінив нотатки (подія kb): наступне звернення перечитає індекс. */
+export function invalidateNoteIndex() {
+  loadedAt = 0
+  if (index) loadNoteIndex()
+}
+
+const subscribe = (l: () => void) => {
+  listeners.add(l)
+  return () => listeners.delete(l)
+}
+
+export function useNoteIndex(wanted: boolean): KbNote[] | null {
+  const notes = useSyncExternalStore(subscribe, () => index)
+  useEffect(() => {
+    if (wanted) loadNoteIndex()
+  }, [wanted])
+  return notes
+}
+
+/** Нотатка за згадкою: шлях від кореня сховища (з .md чи без), з назвою сховища попереду чи без, або назва. */
+export function findNote(notes: KbNote[], raw: string): KbNote | null {
+  let t = raw.trim().replace(/^\/+/, '')
+  const at = t.indexOf('Hermes Vault/')
+  if (at >= 0) t = t.slice(at + 'Hermes Vault/'.length)
+  const lower = t.toLowerCase()
+  const withMd = lower.endsWith('.md') ? lower : `${lower}.md`
+  const exact = notes.find((n) => n.path.toLowerCase() === withMd)
+  if (exact) return exact
+  if (lower.includes('/')) return notes.find((n) => n.path.toLowerCase().endsWith(`/${withMd}`)) ?? null
+  // Лише назва (як у [[вікі-посиланні]]): беремо, якщо вона однозначна.
+  const byName = notes.filter((n) => n.path.toLowerCase().split('/').pop() === withMd || n.title.toLowerCase() === lower)
+  return byName.length === 1 ? byName[0]! : null
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const noteLink = (n: KbNote, text?: string) => `[${(text || n.title).replace(/[[\]]/g, '')}](kbnote:${encodeURIComponent(n.path)})`
+
+/** Згадки нотаток у тексті відповіді → посилання kbnote:. Код у ``` і наявні посилання не чіпаємо. */
+export function linkifyNotes(text: string, notes: KbNote[] | null): string {
+  if (!notes?.length || !/\.md\b|\[\[/.test(text)) return text
+  // Повні шляхи нотаток, довші першими, щоб «A/B.md» не з'їв частину «A/B.md.bak».
+  const paths = notes.map((n) => n.path).filter((p) => p.includes('/') || p.length > 6).sort((a, b) => b.length - a.length)
+  const byPath = new Map(notes.map((n) => [n.path, n]))
+  // Перед шляхом може стояти повний шлях до сховища (з пробілами, як «Mobile Documents» в iCloud).
+  const prefix = `(?:(?:~|/Users/)[^\\n\`"'()]*?Hermes Vault/|Hermes Vault/)?`
+  const pathRe = paths.length ? new RegExp(`${prefix}(${paths.map(escapeRe).join('|')})`, 'g') : null
+  return text
+    .split(/(```[\s\S]*?```|`[^`\n]+`|\[[^\]\n]*\]\([^)\n]*\))/g)
+    .map((chunk, i) => {
+      if (i % 2 === 1) {
+        // Шлях у `коді` цілком — посилання; інший код і готові посилання лишаємо.
+        if (chunk.startsWith('`') && !chunk.startsWith('```')) {
+          const n = findNote(notes, chunk.slice(1, -1))
+          if (n && /\.md$|\//.test(chunk)) return noteLink(n)
+        }
+        return chunk
+      }
+      let out = chunk.replace(/\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|([^\]\n]*))?\]\]/g, (all, target: string, alias?: string) => {
+        const n = findNote(notes, target)
+        return n ? noteLink(n, alias) : all
+      })
+      if (pathRe) out = out.replace(pathRe, (all, p: string) => (byPath.has(p) ? noteLink(byPath.get(p)!) : all))
+      return out
+    })
+    .join('')
 }

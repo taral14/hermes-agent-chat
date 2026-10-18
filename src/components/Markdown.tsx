@@ -3,6 +3,7 @@ import { memo, useState, type ReactNode } from 'react'
 import ReactMarkdown, { type Components, defaultUrlTransform } from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
+import { linkifyNotes, notePath, useNoteIndex } from '../kb.ts'
 
 function textOf(node: ReactNode): string {
   if (node == null || typeof node === 'boolean') return ''
@@ -48,6 +49,25 @@ const components: Components = {
     )
   },
   a({ href, children }) {
+    // Нотатка з бази знань, згадана у відповіді (див. linkifyNotes).
+    if (href?.startsWith('kbnote:')) {
+      const path = decodeURIComponent(href.slice('kbnote:'.length))
+      return (
+        <a
+          href={notePath(path)}
+          className="note-chip"
+          title={path}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey) return
+            e.preventDefault()
+            window.dispatchEvent(new CustomEvent('chat:kbnote', { detail: path }))
+          }}
+        >
+          <BookOpen size={15} />
+          <span>{children}</span>
+        </a>
+      )
+    }
     // Посилання Hermes на нотатки Obsidian відкриваються в базі знань чату.
     if (href?.startsWith('obsidian://')) {
       // Текст посилання — сама адреса? Показуємо назву нотатки.
@@ -113,15 +133,17 @@ function linkifyObsidian(text: string): string {
 }
 
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
+  const mentions = /\.md\b|\[\[/.test(text)
+  const notes = useNoteIndex(mentions)
   return (
     <div className="md">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
         components={components}
-        urlTransform={(url) => (url.startsWith('obsidian://') ? url : defaultUrlTransform(url))}
+        urlTransform={(url) => (url.startsWith('obsidian://') || url.startsWith('kbnote:') ? url : defaultUrlTransform(url))}
       >
-        {linkifyObsidian(text)}
+        {linkifyNotes(linkifyObsidian(text), mentions ? notes : null)}
       </ReactMarkdown>
     </div>
   )
