@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Attachment, Chat, Message, ModelChoice, Part, PushSettings, Usage } from '../src/shared.ts'
+import type { Attachment, Chat, ChatMode, Message, ModelChoice, Part, PushSettings, Usage } from '../src/shared.ts'
 
 export type { PushSettings }
 
@@ -73,6 +73,19 @@ db.exec(`
   );
 `)
 
+// Міграції: двигун чату (api — старий Runs API, native — рідний протокол gateway) і стан автоматизацій.
+for (const sql of [
+  `ALTER TABLE chats ADD COLUMN engine TEXT NOT NULL DEFAULT 'api'`,
+  `ALTER TABLE chats ADD COLUMN control TEXT`,
+  `ALTER TABLE chats ADD COLUMN mode TEXT NOT NULL DEFAULT 'auto'`,
+]) {
+  try {
+    db.exec(sql)
+  } catch {
+    /* колонка вже є */
+  }
+}
+
 type Row = Record<string, unknown>
 const str = (v: unknown) => (v == null ? '' : String(v))
 const json = <T>(v: unknown, fallback: T): T => {
@@ -83,7 +96,7 @@ const json = <T>(v: unknown, fallback: T): T => {
   }
 }
 
-export type ChatRow = Chat & { sessionId: string; titleSource: string }
+export type ChatRow = Chat & { sessionId: string; titleSource: string; engine: 'api' | 'native' }
 export type MessageRow = Message & { runId: string | null; lastSeq: number }
 
 function toChat(r: Row): ChatRow {
@@ -97,6 +110,9 @@ function toChat(r: Row): ChatRow {
     createdAt: Number(r.created_at),
     updatedAt: Number(r.updated_at),
     running: Boolean(r.running),
+    engine: str(r.engine) === 'native' ? 'native' : 'api',
+    mode: (['ask', 'auto', 'plan'].includes(str(r.mode)) ? str(r.mode) : 'auto') as ChatMode,
+    control: json<Chat['control']>(r.control, null),
   }
 }
 
@@ -120,11 +136,11 @@ function toMessage(r: Row): MessageRow {
 }
 
 /** Публічна форма без службових полів. */
-export function publicChat({ sessionId: _s, titleSource: _t, ...chat }: ChatRow): Chat {
-  return chat
+export function publicChat({ sessionId: _s, titleSource: _t, engine, ...chat }: ChatRow): Chat {
+  return { ...chat, native: engine === 'native' }
 }
-export function publicMessage({ runId: _r, lastSeq: _l, ...msg }: MessageRow): Message {
-  return msg
+export function publicMessage({ runId, lastSeq: _l, ...msg }: MessageRow): Message {
+  return { ...msg, turn: Boolean(runId) }
 }
 
 const RUNNING = `EXISTS (SELECT 1 FROM messages m WHERE m.chat_id = c.id AND m.status IN ('queued','running','stopping'))`
@@ -141,21 +157,31 @@ export function getChat(id: string): ChatRow | null {
   return r ? toChat(r) : null
 }
 
-export function createChat(id: string, sessionId: string, model: ModelChoice): ChatRow {
+export function createChat(id: string, sessionId: string, model: ModelChoice, engine: 'api' | 'native' = 'native'): ChatRow {
   const now = Date.now()
-  db.prepare('INSERT INTO chats (id, session_id, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
+  db.prepare('INSERT INTO chats (id, session_id, model, engine, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(
     id,
     sessionId,
     model ? JSON.stringify(model) : null,
+    engine,
     now,
     now,
   )
   return getChat(id)!
 }
 
+export function getChatBySession(sessionId: string): ChatRow | null {
+  const r = db.prepare(`SELECT c.*, ${RUNNING} AS running FROM chats c WHERE c.session_id = ?`).get(sessionId)
+  return r ? toChat(r) : null
+}
+
+export function deleteMessagesFrom(chatId: string, createdAt: number) {
+  db.prepare('DELETE FROM messages WHERE chat_id = ? AND created_at >= ?').run(chatId, createdAt)
+}
+
 export function updateChat(
   id: string,
-  patch: { title?: string; titleSource?: string; pinned?: boolean; model?: ModelChoice; touch?: boolean },
+  patch: { title?: string; titleSource?: string; pinned?: boolean; model?: ModelChoice; touch?: boolean; sessionId?: string; control?: Chat['control']; mode?: ChatMode },
 ) {
   const sets: string[] = []
   const args: (string | number | null)[] = []
@@ -174,6 +200,18 @@ export function updateChat(
   if (patch.model !== undefined) {
     sets.push('model = ?')
     args.push(patch.model ? JSON.stringify(patch.model) : null)
+  }
+  if (patch.sessionId !== undefined) {
+    sets.push('session_id = ?')
+    args.push(patch.sessionId)
+  }
+  if (patch.mode !== undefined) {
+    sets.push('mode = ?')
+    args.push(patch.mode)
+  }
+  if (patch.control !== undefined) {
+    sets.push('control = ?')
+    args.push(patch.control ? JSON.stringify(patch.control) : null)
   }
   if (patch.touch) {
     sets.push('updated_at = ?')

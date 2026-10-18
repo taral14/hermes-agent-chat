@@ -1462,6 +1462,7 @@ button.act-line:hover:not(:disabled) {
 /* ---------- Поле вводу ---------- */
 
 .bottom {
+  position: relative;
   padding: 0 16px;
   flex-shrink: 0;
 }
@@ -1608,7 +1609,7 @@ button.act-line:hover:not(:disabled) {
 .to-bottom {
   position: absolute;
   left: 50%;
-  bottom: 150px;
+  bottom: calc(100% + 10px);
   transform: translateX(-50%);
   width: 36px;
   height: 36px;
@@ -2868,4 +2869,293 @@ button.act-line:hover:not(:disabled) {
 
 .pw-row + .pw-row {
   margin-top: 10px;
+}
+
+/* ---------- Меню команд «/» ---------- */
+
+.composer-wrap {
+  position: relative;
+}
+
+.slash-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  max-height: min(46vh, 380px);
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 20px;
+  background: var(--menu);
+  box-shadow: var(--menu-shadow);
+  z-index: 30;
+  scrollbar-width: thin;
+}
+
+.slash-group {
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.slash-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.slash-item.is-active {
+  background: var(--hover);
+}
+
+.slash-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bubble);
+  color: var(--text-2);
+}
+
+.slash-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slash-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.slash-hint {
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.slash-desc {
+  font-size: 13px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ---------- Повідомлення: команди, редагування, примітки ---------- */
+
+.bubble.is-command {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14.5px;
+}
+
+.edit-box {
+  width: min(100%, 620px);
+  padding: 12px;
+  border-radius: 22px;
+  background: var(--bubble);
+}
+
+.edit-box textarea {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.5;
+  padding: 4px 6px;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.msg-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--bubble);
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.msg-notice svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--ok);
+}
+
+/* ---------- Панель мети ---------- */
+
+.goal-bar {
+  max-width: 768px;
+  margin: 0 auto 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.goal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px 8px 12px;
+  border-radius: 18px;
+  background: var(--bubble);
+  border: 1px solid var(--border);
+}
+
+.goal.is-paused {
+  opacity: 0.8;
+}
+
+.goal-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ok);
+  color: #fff;
+}
+
+.goal.is-paused .goal-icon,
+.goal-small .goal-icon {
+  background: var(--text-3);
+}
+
+.goal-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.goal-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+
+.goal-title {
+  font-size: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.goal-turns {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+}
+
+.goal-small {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* ---------- Режим чату ---------- */
+
+.mode-picker {
+  position: relative;
+  margin-left: 4px;
+}
+
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px 0 11px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.mode-chip:hover {
+  background: var(--hover);
+}
+
+.mode-chip.is-auto {
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.mode-chip.is-plan {
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mode-chip.is-auto {
+    color: #fbbf24;
+  }
+  .mode-chip.is-plan {
+    color: #93c5fd;
+  }
+}
+
+.mode-menu {
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 300px;
+}
+
+.mode-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bubble);
+  color: var(--text-2);
+}
+
+.mode-icon.is-auto {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+
+.mode-icon.is-plan {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+@media (max-width: 768px) {
+  .mode-menu {
+    width: min(300px, calc(100vw - 40px));
+    left: -40px;
+  }
 }

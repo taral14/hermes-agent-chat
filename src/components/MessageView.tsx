@@ -15,19 +15,23 @@ import {
   FileSpreadsheet,
   FileText,
   FileVideo,
+  GitBranch,
   Globe,
   ListTodo,
   Loader2,
   MessageSquarePlus,
+  Pencil,
+  RotateCcw,
   Search,
   ShieldAlert,
   Sparkles,
   SquareTerminal,
+  Target,
   Users,
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
-import { memo, useEffect, useState } from 'react'
+import { createContext, memo, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, uploadUrl } from '../api.ts'
 import type { Attachment, Message, Part } from '../shared.ts'
 import { AudioPlayer } from './AudioPlayer.tsx'
@@ -144,13 +148,109 @@ function Attachments({ items, side }: { items: Attachment[]; side: 'user' | 'ass
   )
 }
 
+// ---------- Дії над повідомленнями (лише чати на рідному протоколі) ----------
+
+export type MessageActions = {
+  /** Чат на рідному протоколі й Hermes зараз не працює. */
+  enabled: boolean
+  retry: (m: Message) => Promise<void>
+  edit: (m: Message, text: string) => Promise<void>
+  branch: (m: Message) => Promise<void>
+}
+
+export const ActionsContext = createContext<MessageActions | null>(null)
+
+function ActionButton({ label, onClick, children }: { label: string; onClick: () => Promise<void> | void; children: ReactNode }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <button
+      type="button"
+      className="icon-btn"
+      title={label}
+      aria-label={label}
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true)
+        try {
+          await onClick()
+        } finally {
+          setBusy(false)
+        }
+      }}
+    >
+      {busy ? <Loader2 size={16} className="spin" /> : children}
+    </button>
+  )
+}
+
 function UserMessage({ m }: { m: Message }) {
+  const actions = useContext(ActionsContext)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(m.text)
+  const [busy, setBusy] = useState(false)
+  const box = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 320)}px`
+  }, [draft, editing])
+  const canEdit = Boolean(actions?.enabled && m.turn && m.text && !m.text.startsWith('/'))
+
+  if (editing && actions) {
+    return (
+      <div className="msg msg-user">
+        <div className="edit-box">
+          <textarea ref={box} autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} />
+          <div className="edit-actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setEditing(false)
+                setDraft(m.text)
+              }}
+            >
+              Скасувати
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy || !draft.trim() || draft.trim() === m.text}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await actions.edit(m, draft.trim())
+                  setEditing(false)
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              {busy ? <Loader2 size={16} className="spin" /> : 'Надіслати'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="msg msg-user">
       <Attachments items={m.attachments} side="user" />
-      {m.text && <div className="bubble">{m.text}</div>}
+      {m.text && <div className={`bubble ${m.text.startsWith('/') ? 'is-command' : ''}`}>{m.text}</div>}
       {m.text && (
         <div className="msg-actions msg-actions-user">
+          {canEdit && (
+            <ActionButton
+              label="Редагувати"
+              onClick={() => {
+                setDraft(m.text)
+                setEditing(true)
+              }}
+            >
+              <Pencil size={16} />
+            </ActionButton>
+          )}
           <CopyButton text={m.text} />
         </div>
       )}
@@ -426,16 +526,24 @@ function splitParts(m: Message): { activity: Part[]; answer: string } {
 }
 
 function AssistantMessage({ m }: { m: Message }) {
+  const actions = useContext(ActionsContext)
   const active = ACTIVE.has(m.status)
   const { activity, answer } = splitParts(m)
   const pending = m.parts.filter(
     (p): p is Extract<Part, { type: 'approval' | 'clarify' }> =>
       (p.type === 'approval' || p.type === 'clarify') && p.state === 'pending',
   )
-  const showActivity = activity.length > 0 || (active && !answer)
+  const notices = m.parts.filter((p): p is Extract<Part, { type: 'notice' }> => p.type === 'notice')
+  const showActivity = activity.filter((p) => p.type !== 'notice').length > 0 || (active && !answer)
   return (
     <div className="msg msg-assistant">
-      {showActivity && <Activity m={m} parts={activity} active={active && !answer} />}
+      {notices.map((n, i) => (
+        <div key={i} className="msg-notice">
+          <Target size={15} />
+          <span>{n.text.replace(/^⊙\s*/, '')}</span>
+        </div>
+      ))}
+      {showActivity && <Activity m={m} parts={activity.filter((p) => p.type !== 'notice')} active={active && !answer} />}
       {pending.map((p) =>
         p.type === 'approval' ? <ApprovalCard key={p.promptId} m={m} p={p} /> : <ClarifyCard key={p.promptId} m={m} p={p} />,
       )}
@@ -452,9 +560,19 @@ function AssistantMessage({ m }: { m: Message }) {
           <span>{m.error}</span>
         </div>
       )}
-      {!active && (answer || m.attachments.length > 0) && (
+      {!active && (answer || m.attachments.length > 0 || m.error) && (
         <div className="msg-actions">
-          <CopyButton text={answer} />
+          {answer && <CopyButton text={answer} />}
+          {actions?.enabled && m.turn && (
+            <>
+              <ActionButton label="Повторити" onClick={() => actions.retry(m)}>
+                <RotateCcw size={16} />
+              </ActionButton>
+              <ActionButton label="Нова гілка звідси" onClick={() => actions.branch(m)}>
+                <GitBranch size={16} />
+              </ActionButton>
+            </>
+          )}
           {(m.model || m.usage?.total_tokens) && (
             <span className="msg-meta">
               {m.model}

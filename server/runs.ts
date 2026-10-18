@@ -1,7 +1,7 @@
 // Ведення запусків Hermes: сервер сам слухає події, зберігає їх у SQLite і розсилає вкладкам.
 // Тому довга задача не залежить від відкритого браузера, а після перезапуску сервера підхоплюється знову.
 import type { Message, Part } from '../src/shared.ts'
-import { type MessageRow, activeMessages, answersWithoutFiles, getChat, getMessage, getSetting, saveMessage, updateChat } from './db.ts'
+import { type MessageRow, activeMessages, answersWithoutFiles, getChat, getMessage, saveMessage, updateChat } from './db.ts'
 import { collectMedia } from './media.ts'
 import { promptRaised, runFinished } from './push.ts'
 import {
@@ -25,17 +25,29 @@ export function setRunListeners(onMessage: Broadcast, onChat: ChatChanged) {
   chatChanged = onChat
 }
 
-type Live = { msg: MessageRow; abort: AbortController; dirty: boolean; flushTimer: NodeJS.Timeout | null }
+export type Live = { msg: MessageRow; abort: AbortController; dirty: boolean; flushTimer: NodeJS.Timeout | null }
 const live = new Map<string, Live>()
+
+/** Живе повідомлення, яке веде не цей модуль (рідний протокол Hermes): реєструємо без власного потоку подій. */
+export function openLive(msg: MessageRow): Live {
+  const existing = live.get(msg.id)
+  if (existing) return existing
+  const l: Live = { msg, abort: new AbortController(), dirty: false, flushTimer: null }
+  live.set(msg.id, l)
+  return l
+}
+
+export const getLive = (id: string) => live.get(id)
+export const liveMessages = () => [...live.values()]
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v))
 
-/** У веб-чаті Hermes за замовчуванням не чекає дозволу: усе дозволено (вимикається в «Вхід і безпека»). */
-export const autoApprove = () => getSetting('auto_approve') !== 'off'
+/** Режим чату «Дозволяти все»: сервер сам відповідає на запити Hermes про дозвіл. */
+export const autoApprove = (chatId: string) => getChat(chatId)?.mode === 'auto'
 
 /** Зберегти і розіслати. Дельти тексту групуємо, решту подій шлемо одразу. */
-function flush(l: Live, now = false) {
+export function flush(l: Live, now = false) {
   l.dirty = true
   if (now) {
     if (l.flushTimer) clearTimeout(l.flushTimer)
@@ -55,12 +67,12 @@ function flush(l: Live, now = false) {
   }, 120)
 }
 
-function lastPart<T extends Part['type']>(parts: Part[], type: T): Extract<Part, { type: T }> | undefined {
+export function lastPart<T extends Part['type']>(parts: Part[], type: T): Extract<Part, { type: T }> | undefined {
   const p = parts[parts.length - 1]
   return p?.type === type ? (p as Extract<Part, { type: T }>) : undefined
 }
 
-function findPart<T extends Part['type']>(parts: Part[], type: T, match: (p: Extract<Part, { type: T }>) => boolean) {
+export function findPart<T extends Part['type']>(parts: Part[], type: T, match: (p: Extract<Part, { type: T }>) => boolean) {
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i]!
     if (p.type === type && match(p as Extract<Part, { type: T }>)) return p as Extract<Part, { type: T }>
@@ -68,10 +80,11 @@ function findPart<T extends Part['type']>(parts: Part[], type: T, match: (p: Ext
   return undefined
 }
 
-function finish(l: Live, status: Message['status'], patch: { text?: string; error?: string | null } = {}) {
+export function finish(l: Live, status: Message['status'], patch: { text?: string; error?: string | null } = {}) {
   const m = l.msg
   if (patch.text !== undefined) m.text = patch.text
   if (patch.error !== undefined) m.error = patch.error
+  else if (status === 'done') m.error = null
   m.status = status
   m.finishedAt = Date.now()
   // Незавершені інструменти й запити на рішення більше не чекають.
@@ -98,7 +111,7 @@ function finish(l: Live, status: Message['status'], patch: { text?: string; erro
 }
 
 /** Hermes сам придумує назву сесії після перших реплік; підтягуємо її, якщо користувач не перейменовував. */
-async function refreshTitle(chatId: string) {
+export async function refreshTitle(chatId: string) {
   for (const delay of [1500, 8000, 25000]) {
     await new Promise((r) => setTimeout(r, delay))
     const chat = getChat(chatId)
@@ -189,9 +202,9 @@ function apply(l: Live, e: HermesEvent) {
         state: 'pending',
       })
       const a = parts[parts.length - 1] as Extract<Part, { type: 'approval' }>
-      if (autoApprove()) {
+      if (autoApprove(m.chatId)) {
         // «Дозволяти все»: відповідаємо одразу, задача не зупиняється й не чекає людину.
-        const choice = a.choices.includes('session') ? 'session' : 'once'
+        const choice = 'once'
         a.state = 'answered'
         a.choice = choice
         a.auto = true
@@ -372,6 +385,8 @@ export function addSteer(messageId: string, text: string) {
 
 export function resumeActiveRuns() {
   for (const m of activeMessages()) {
+    // Чати на рідному протоколі відновлює native.ts.
+    if (getChat(m.chatId)?.engine === 'native') continue
     if (m.runId) track(m)
     else failMessage(m, 'Задачу не вдалося передати Hermes.')
   }
@@ -385,6 +400,25 @@ export function backfillMedia() {
     m.attachments = media.attachments
     m.text = media.text
     saveMessage(m)
+  }
+}
+
+/** Чат перемкнули на «Дозволяти все»: відповідаємо на запити, які вже чекають (старий двигун Runs API). */
+export function approvePendingApi(chatId: string) {
+  for (const l of live.values()) {
+    if (l.msg.chatId !== chatId || !l.msg.runId) continue
+    for (const p of l.msg.parts) {
+      if (p.type !== 'approval' || p.state !== 'pending') continue
+      const choice = 'once'
+      answerApproval(l.msg.runId, p.promptId, p.generation, choice)
+        .then(() => {
+          p.state = 'answered'
+          p.choice = choice
+          p.auto = true
+          flush(l, true)
+        })
+        .catch(() => {})
+    }
   }
 }
 

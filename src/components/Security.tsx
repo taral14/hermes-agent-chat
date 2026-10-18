@@ -1,4 +1,4 @@
-import { Fingerprint, KeyRound, Loader2, Pencil, ShieldCheck, Trash2, Usb, X, Zap } from 'lucide-react'
+import { Fingerprint, KeyRound, Loader2, Pencil, ShieldCheck, Trash2, Usb, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import * as passkey from '../passkey.ts'
 import type { PasskeyInfo, Security as SecurityState } from '../passkey.ts'
@@ -129,37 +129,6 @@ export function Security({ onClose }: { onClose: () => void }) {
             ) : (
               <div className="notif-msg">Цей браузер не підтримує ключі доступу.</div>
             )}
-
-            <label className="notif-row pw-row">
-              <span className="notif-row-icon">
-                <Zap size={18} />
-              </span>
-              <span className="notif-row-text">
-                <span className="notif-row-title">Дозволяти Hermes усе</span>
-                <span className="notif-row-hint">
-                  {state.autoApprove
-                    ? 'Команди виконуються без запитів на дозвіл. Лише у веб-чаті, Telegram не змінюється'
-                    : 'Hermes питатиме дозволу на ризиковані команди'}
-                </span>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={state.autoApprove}
-                disabled={busy === 'auto'}
-                className={`switch ${state.autoApprove ? 'is-on' : ''}`}
-                onClick={() => {
-                  setBusy('auto')
-                  passkey
-                    .setAutoApprove(!state.autoApprove)
-                    .then(setState)
-                    .catch((e: Error) => setMsg(e.message))
-                    .finally(() => setBusy(''))
-                }}
-              >
-                <span className="switch-knob" />
-              </button>
-            </label>
 
             <label className={`notif-row pw-row ${state.passkeys.length ? '' : 'is-disabled'}`}>
               <span className="notif-row-icon">

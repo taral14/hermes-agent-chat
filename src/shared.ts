@@ -46,6 +46,8 @@ export type Part =
     }
   | { type: 'subagent'; id: string; goal: string; status: 'running' | 'done' | 'error'; summary?: string; duration?: number }
   | { type: 'steer'; text: string }
+  /** Результат слеш-команди (/status, /usage тощо) або службова примітка Hermes. */
+  | { type: 'notice'; text: string }
 
 export type Usage = { input_tokens?: number; output_tokens?: number; total_tokens?: number }
 
@@ -63,9 +65,21 @@ export type Message = {
   model: string | null
   createdAt: number
   finishedAt: number | null
+  /** Повідомлення має свій хід у Hermes: його можна повторити чи відгалузити. */
+  turn?: boolean
 }
 
 export type ModelChoice = { provider: string; model: string; effort?: string } | null
+
+/** Стан автоматизацій сесії Hermes: мета (/goal), петля (/loop), серцебиття (/heartbeat). */
+export type ChatControl = {
+  goal?: { title: string; status: string; turns_used?: number; max_turns?: number } | null
+  loop?: Record<string, unknown> | null
+  heartbeat?: Record<string, unknown> | null
+} | null
+
+/** Режим чату, як у Claude Code: питати дозволу, дозволяти все або лише складати план. */
+export type ChatMode = 'ask' | 'auto' | 'plan'
 
 export type Chat = {
   id: string
@@ -75,6 +89,10 @@ export type Chat = {
   createdAt: number
   updatedAt: number
   running: boolean
+  /** Чат працює через рідний протокол Hermes (команди, повтор, редагування, відгалуження). */
+  native?: boolean
+  control?: ChatControl
+  mode: ChatMode
 }
 
 export type ModelOptions = {

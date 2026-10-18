@@ -4,10 +4,11 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import type { Attachment, ModelChoice, ServerEvent } from '../src/shared.ts'
+import type { Attachment, ChatMode, ModelChoice, ServerEvent } from '../src/shared.ts'
 import {
   DATA_DIR,
   DEFAULT_PUSH,
+  getMessage,
   type PasskeyRow,
   deletePasskey,
   listPasskeys,
@@ -48,11 +49,28 @@ import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simp
 import { PasskeyError, loginOptions, loginVerify, passwordLoginAllowed, registerVerify, registrationOptions } from './passkeys.ts'
 import { createJob, deleteJob, getJob, jobAction, jobRuns, listJobs, runOutput, updateJob } from './jobs.ts'
 import { CHAT_INSTRUCTIONS, mimeOf, sweepUploads } from './media.ts'
+import {
+  NativeError,
+  commandCatalog,
+  initNative,
+  approvePending,
+  nativeAnswer,
+  nativeBranch,
+  nativeCommand,
+  nativeControl,
+  nativeDelete,
+  nativeRename,
+  nativeRewind,
+  nativeSend,
+  nativeSteer,
+  nativeStop,
+} from './native.ts'
+import { gateway } from './gateway.ts'
 import { VAPID_PUBLIC, jobsWatched, sendTest, setPresence } from './push.ts'
 import {
   activeRunCount,
   addSteer,
-  autoApprove,
+  approvePendingApi,
   backfillMedia,
   failMessage,
   liveMessage,
@@ -182,6 +200,7 @@ setInterval(() => {
 // ---------- Логіка чату ----------
 
 const newId = () => randomBytes(9).toString('base64url')
+const isMode = (v: unknown): v is ChatMode => v === 'ask' || v === 'auto' || v === 'plan'
 
 function shortTitle(text: string) {
   const t = text.replace(/\s+/g, ' ').trim()
@@ -207,7 +226,7 @@ async function buildInput(text: string, attachments: Attachment[]): Promise<Inpu
   return [{ type: 'text', text: (text || 'Подивись прикріплені файли.') + note }, ...parts]
 }
 
-async function sendMessage(body: { chatId?: string; text?: string; attachments?: string[]; model?: ModelChoice }) {
+async function sendMessage(body: { chatId?: string; text?: string; attachments?: string[]; model?: ModelChoice; mode?: string }) {
   const text = String(body.text ?? '').trim()
   const attachments: Attachment[] = (body.attachments ?? [])
     .map((id) => getUpload(String(id)))
@@ -218,14 +237,30 @@ async function sendMessage(body: { chatId?: string; text?: string; attachments?:
   let chat = body.chatId ? getChat(body.chatId) : null
   if (body.chatId && !chat) throw new HttpError(404, 'Чат не знайдено')
   if (!chat) {
+    // Нові чати — на рідному протоколі Hermes; сесія створиться при відправці.
     const id = newId()
-    chat = createChat(id, `webchat-${id}`, body.model ?? null)
-    updateChat(id, { title: shortTitle(text || attachments[0]!.name), titleSource: 'auto' })
+    chat = createChat(id, '', body.model ?? null, 'native')
+    updateChat(id, { title: shortTitle(text || attachments[0]!.name), titleSource: 'auto', ...(isMode(body.mode) ? { mode: body.mode } : {}) })
   } else if (body.model !== undefined) {
     updateChat(chat.id, { model: body.model })
   }
   if (chat.running) throw new HttpError(409, 'Hermes ще працює над попередньою задачею')
   chat = getChat(chat.id)!
+
+  if (chat.engine === 'native') {
+    emitChat(chat.id)
+    const r =
+      text.startsWith('/') && !attachments.length
+        ? await nativeCommand(chat, text)
+        : chat.mode === 'plan' && !attachments.length
+          ? await nativeCommand(chat, `/plan ${text}`, text) // «Лише план»: Hermes складає план і нічого не виконує
+          : await nativeSend(chat, text, attachments)
+    emitChat(chat.id)
+    return {
+      chat: publicChat(getChat(chat.id)!),
+      messages: [publicMessage(r.user), publicMessage(liveMessage(r.assistant.id) ?? r.assistant)],
+    }
+  }
 
   const now = Date.now()
   const user: MessageRow = {
@@ -406,7 +441,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   if (path.startsWith('/api/auth/')) {
     try {
       const pub = (k: PasskeyRow) => ({ id: k.id, name: k.name, kind: k.kind, backedUp: k.backedUp, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt })
-      const security = () => ({ passkeys: listPasskeys().map(pub), passwordLogin: passwordLoginAllowed(), autoApprove: autoApprove() })
+      const security = () => ({ passkeys: listPasskeys().map(pub), passwordLogin: passwordLoginAllowed() })
       if (path === '/api/auth/security' && method === 'GET') return send(res, 200, security())
       if (path === '/api/auth/passkeys/options' && method === 'POST') {
         const b = await readJson<{ kind?: string }>(req)
@@ -428,11 +463,6 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
         deletePasskey(k[1]!)
         // Без жодного ключа «лише ключі» не має сенсу: повертаємо вхід за паролем, щоб не замкнутись.
         if (!listPasskeys().length) setSetting('password_login', 'on')
-        return send(res, 200, security())
-      }
-      if (path === '/api/auth/auto-approve' && method === 'POST') {
-        const b = await readJson<{ enabled?: boolean }>(req)
-        setSetting('auto_approve', b.enabled === false ? 'off' : 'on')
         return send(res, 200, security())
       }
       if (path === '/api/auth/password-login' && method === 'POST') {
@@ -483,30 +513,118 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
       })
     }
     if (method === 'PATCH') {
-      const b = await readJson<{ title?: string; pinned?: boolean; model?: ModelChoice }>(req)
+      const b = await readJson<{ title?: string; pinned?: boolean; model?: ModelChoice; mode?: string }>(req)
       if (typeof b.title === 'string' && b.title.trim()) {
         const title = b.title.trim().slice(0, 120)
         updateChat(chat.id, { title, titleSource: 'user' })
-        void renameSession(chat.sessionId, title)
+        if (chat.engine === 'native') void nativeRename(chat, title)
+        else void renameSession(chat.sessionId, title)
       }
       if (typeof b.pinned === 'boolean') updateChat(chat.id, { pinned: b.pinned })
       if (b.model !== undefined) updateChat(chat.id, { model: b.model })
+      if (isMode(b.mode)) {
+        updateChat(chat.id, { mode: b.mode })
+        if (b.mode === 'auto') {
+          if (chat.engine === 'native') approvePending(getChat(chat.id)!)
+          else approvePendingApi(chat.id)
+        }
+      }
       emitChat(chat.id)
       return send(res, 200, publicChat(getChat(chat.id)!))
     }
     if (method === 'DELETE') {
       for (const msg of listMessages(chat.id)) {
         const l = liveMessage(msg.id)
-        if (l?.runId && ['queued', 'running', 'stopping'].includes(l.status)) await stopRun(l.runId).catch(() => {})
+        if (!l?.runId || !['queued', 'running', 'stopping'].includes(l.status)) continue
+        if (chat.engine === 'native') await nativeStop(l.id).catch(() => {})
+        else await stopRun(l.runId).catch(() => {})
       }
       // Вкладення цього чату, які більше ніде не використовуються, видаляємо одразу.
       const attached = new Set(listMessages(chat.id).flatMap((x) => x.attachments.map((a) => a.id)))
       deleteChat(chat.id)
       if (attached.size) sweepUploads(0, attached)
-      void deleteSession(chat.sessionId)
+      if (chat.engine === 'native') void nativeDelete(chat)
+      else void deleteSession(chat.sessionId)
       emit({ type: 'chat-deleted', chatId: chat.id })
       return send(res, 200, { ok: true })
     }
+  }
+
+  // Повтор, редагування й відгалуження — лише для чатів на рідному протоколі.
+  m = path.match(/^\/api\/messages\/([\w-]+)\/(retry|edit|branch)$/)
+  if (m && method === 'POST') {
+    const target = getMessage(m[1]!)
+    const chat = target ? getChat(target.chatId) : null
+    if (!target || !chat) throw new HttpError(404, 'Повідомлення не знайдено')
+    if (chat.engine !== 'native') throw new HttpError(400, 'Цей чат створено до оновлення: повтор і гілки працюють лише в нових чатах')
+    try {
+      if (m[2] === 'branch') {
+        const id = await nativeBranch(chat, target.id)
+        emitChat(id)
+        return send(res, 200, { chatId: id })
+      }
+      let userId = target.id
+      if (target.role === 'assistant') {
+        const msgs = listMessages(chat.id)
+        const idx = msgs.findIndex((x) => x.id === target.id)
+        const prev = msgs.slice(0, idx).reverse().find((x) => x.role === 'user')
+        if (!prev) throw new HttpError(400, 'Немає повідомлення, яке можна повторити')
+        userId = prev.id
+      }
+      const b = m[2] === 'edit' ? await readJson<{ text?: string }>(req) : {}
+      if (m[2] === 'edit' && !b.text?.trim()) throw new HttpError(400, 'Порожній текст')
+      await nativeRewind(chat, userId, b.text)
+      emitChat(chat.id)
+      return send(res, 200, { chat: publicChat(getChat(chat.id)!), messages: listMessages(chat.id).map((x) => publicMessage(liveMessage(x.id) ?? x)) })
+    } catch (err) {
+      if (err instanceof NativeError) throw new HttpError(err.status, err.message)
+      throw err
+    }
+  }
+
+  m = path.match(/^\/api\/chats\/([\w-]+)\/control$/)
+  if (m && method === 'POST') {
+    const chat = getChat(m[1]!)
+    if (!chat || chat.engine !== 'native') throw new HttpError(404, 'Чат не знайдено')
+    const { command } = await readJson<{ command?: string }>(req)
+    // Лише керування автоматизаціями сесії, без довільних команд.
+    if (!command || !/^\/(goal|loop|heartbeat)( (pause|resume|clear|stop|off|status))?$/.test(command.trim())) throw new HttpError(400, 'Невідома дія')
+    try {
+      const output = await nativeControl(chat, command.trim())
+      return send(res, 200, { output })
+    } catch (err) {
+      if (err instanceof NativeError) throw new HttpError(err.status, err.message)
+      throw err
+    }
+  }
+
+  if (path === '/api/commands') {
+    try {
+      return send(res, 200, await commandCatalog())
+    } catch (err) {
+      throw new HttpError(503, (err as Error).message)
+    }
+  }
+
+  m = path.match(/^\/api\/messages\/([\w-]+)\/(stop|steer|approval|clarify)$/)
+  if (m && method === 'POST' && getChat(liveMessage(m[1]!)?.chatId ?? '')?.engine === 'native') {
+    const id = m[1]!
+    try {
+      if (m[2] === 'stop') await nativeStop(id)
+      else if (m[2] === 'steer') {
+        const { text } = await readJson<{ text?: string }>(req)
+        if (!text?.trim()) throw new HttpError(400, 'Порожній текст')
+        await nativeSteer(id, text.trim())
+      } else {
+        const b = await readJson<{ promptId?: string; generation?: number; value?: string }>(req)
+        if (!b.promptId || typeof b.value !== 'string') throw new HttpError(400, 'Немає відповіді')
+        await nativeAnswer(id, m[2] as 'approval' | 'clarify', b.promptId, Number(b.generation ?? 0), b.value)
+      }
+    } catch (err) {
+      if (err instanceof NativeError) throw new HttpError(err.status, err.message)
+      throw err
+    }
+    return send(res, 200, { ok: true })
   }
 
   m = path.match(/^\/api\/messages\/([\w-]+)\/(stop|steer|approval|clarify)$/)
@@ -678,6 +796,7 @@ if (!DEV) {
 }
 
 loadConfig()
+initNative(emitChat)
 resumeActiveRuns()
 backfillMedia()
 sweepUploads()
@@ -686,6 +805,7 @@ server.listen(PORT, '127.0.0.1', () => console.log(`chat: http://127.0.0.1:${POR
 
 function shutdown() {
   stopAll()
+  gateway.stop()
   for (const c of clients) c.end()
   server.close()
   closeDb()

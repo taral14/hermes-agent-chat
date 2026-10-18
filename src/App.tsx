@@ -1,16 +1,17 @@
 import { ArrowDown, Menu, PanelLeftOpen, SquarePen } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { api } from './api.ts'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type CommandInfo, api } from './api.ts'
 import { Composer, type ComposerHandle } from './components/Composer.tsx'
 import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { Login } from './components/Login.tsx'
 import { Notifications } from './components/Notifications.tsx'
 import { Security } from './components/Security.tsx'
 import { reportPresence } from './push.ts'
-import { MessageView } from './components/MessageView.tsx'
+import { ActionsContext, type MessageActions, MessageView } from './components/MessageView.tsx'
+import { GoalBar } from './components/GoalBar.tsx'
 import { ModelPicker } from './components/ModelPicker.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
-import type { Attachment, Chat, Message, ModelChoice, ModelOptions, ServerEvent } from './shared.ts'
+import type { Attachment, Chat, ChatMode, Message, ModelChoice, ModelOptions, ServerEvent } from './shared.ts'
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
 const chatIdFromPath = () => /^\/c\/([\w-]+)/.exec(location.pathname)?.[1] ?? null
@@ -50,7 +51,9 @@ export default function App() {
   const [jobsRoute, setJobsRoute] = useState<JobsRoute | null>(jobsFromPath)
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [models, setModels] = useState<ModelOptions | null>(null)
+  const [commands, setCommands] = useState<CommandInfo[] | null>(null)
   const [newModel, setNewModel] = useState<ModelChoice>(null)
+  const [newMode, setNewMode] = useState<ChatMode>('auto')
   const [sidebar, setSidebar] = useState(() => !isNarrow())
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
@@ -99,6 +102,7 @@ export default function App() {
     if (auth !== 'in') return
     void loadChats()
     api.models().then(setModels).catch(() => {})
+    api.commands().then(setCommands).catch(() => {})
   }, [auth, loadChats])
 
   useEffect(() => {
@@ -229,7 +233,7 @@ export default function App() {
         chatId: currentId ?? undefined,
         text,
         attachments: attachments.map((a) => a.id),
-        ...(currentId ? {} : { model: newModel }),
+        ...(currentId ? {} : { model: newModel, mode: newMode }),
       })
       setChats((c) => sortChats([...c.filter((x) => x.id !== r.chat.id), r.chat]))
       setMessages((m) => {
@@ -276,8 +280,61 @@ export default function App() {
   }
 
   const empty = !currentId || (list && list.length === 0)
+  // Нові чати — на рідному протоколі Hermes; старі (до оновлення) — без команд і повтору.
+  const native = !current || Boolean(current.native)
   const composerEl = (
-    <Composer ref={composer} draftKey={currentId ?? 'new'} running={Boolean(runningMsg)} onSend={send} onStop={stop} onSteer={steer} />
+    <Composer
+      ref={composer}
+      draftKey={currentId ?? 'new'}
+      running={Boolean(runningMsg)}
+      onSend={send}
+      onStop={stop}
+      onSteer={steer}
+      commands={native ? commands : null}
+      mode={native ? (current?.mode ?? newMode) : undefined}
+      onMode={(m) => {
+        if (!current) return setNewMode(m)
+        setChats((c) => c.map((x) => (x.id === current.id ? { ...x, mode: m } : x)))
+        api.patchChat(current.id, { mode: m }).catch(flash)
+      }}
+    />
+  )
+
+  const applyChat = (r: { chat: Chat; messages: Message[] }) => {
+    setChats((c) => sortChats([...c.filter((x) => x.id !== r.chat.id), r.chat]))
+    setMessages((all) => ({ ...all, [r.chat.id]: r.messages }))
+    stick.current = true
+  }
+  const actions = useMemo<MessageActions>(
+    () => ({
+      enabled: native && !runningMsg,
+      retry: async (m) => {
+        try {
+          applyChat(await api.retry(m.id))
+        } catch (e) {
+          flash(e)
+        }
+      },
+      edit: async (m, text) => {
+        try {
+          applyChat(await api.edit(m.id, text))
+        } catch (e) {
+          flash(e)
+          throw e
+        }
+      },
+      branch: async (m) => {
+        try {
+          const r = await api.branch(m.id)
+          await loadChats()
+          navigate(r.chatId)
+        } catch (e) {
+          flash(e)
+        }
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [native, runningMsg, flash, loadChats],
   )
   const header = (
       <header className="topbar">
@@ -386,12 +443,15 @@ export default function App() {
           <>
             <div className="thread" ref={scroller} onScroll={onScroll}>
               <div className="thread-inner">
-                {list?.map((m) => (
-                  <MessageView key={m.id} m={m} />
-                ))}
+                <ActionsContext.Provider value={actions}>
+                  {list?.map((m) => (
+                    <MessageView key={m.id} m={m} />
+                  ))}
+                </ActionsContext.Provider>
               </div>
             </div>
-            {!atBottom && (
+            <div className="bottom">
+              {!atBottom && (
               <button
                 type="button"
                 className="to-bottom"
@@ -401,7 +461,9 @@ export default function App() {
                 <ArrowDown size={18} />
               </button>
             )}
-            <div className="bottom">{composerEl}</div>
+              {current && <GoalBar chat={current} flash={flash} />}
+              {composerEl}
+            </div>
           </>
         )}
           </>
