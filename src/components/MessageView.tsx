@@ -8,14 +8,10 @@ import {
   Code2,
   Download,
   Eye,
-  File as FileIcon,
-  FileArchive,
-  FileAudio,
   FilePen,
-  FileSpreadsheet,
   FileText,
-  FileVideo,
   GitBranch,
+  Link2,
   Globe,
   ListTodo,
   Loader2,
@@ -34,6 +30,7 @@ import {
 import { createContext, memo, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, uploadUrl } from '../api.ts'
 import type { Attachment, Message, Part } from '../shared.ts'
+import { fileKind, formatSize } from '../fileKind.ts'
 import { AudioPlayer } from './AudioPlayer.tsx'
 import { CopyButton, Markdown } from './Markdown.tsx'
 
@@ -86,40 +83,73 @@ function useNow(active: boolean) {
 
 // ---------- Користувач ----------
 
-function fileKind(mime: string, name: string): { label: string; color: string; Icon: LucideIcon } {
-  const ext = name.split('.').pop()?.toUpperCase() ?? ''
-  if (mime === 'application/pdf') return { label: 'PDF', color: '#e5484d', Icon: FileText }
-  if (mime.startsWith('audio/')) return { label: ext || 'АУДІО', color: '#8e4ec6', Icon: FileAudio }
-  if (mime.startsWith('video/')) return { label: ext || 'ВІДЕО', color: '#e54666', Icon: FileVideo }
-  if (/zip|compressed|tar|gzip/.test(mime)) return { label: ext || 'АРХІВ', color: '#6f6f6f', Icon: FileArchive }
-  if (/sheet|csv|excel/.test(mime)) return { label: ext || 'ТАБЛИЦЯ', color: '#10a37f', Icon: FileSpreadsheet }
-  if (/word|text|markdown|json|epub|presentation/.test(mime)) return { label: ext || 'ДОКУМЕНТ', color: '#0285ff', Icon: FileText }
-  return { label: ext || 'ФАЙЛ', color: '#6f6f6f', Icon: FileIcon }
-}
-
-function formatSize(n: number) {
-  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} КБ`
-  return `${(n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} МБ`
-}
-
 function FileCard({ a }: { a: Attachment }) {
-  const { label, color, Icon } = fileKind(a.mime, a.name)
+  const kind = fileKind(a.name, a.mime)
+  const [busy, setBusy] = useState<'' | 'dl' | 'copy'>('')
+  const [note, setNote] = useState('')
+  const flashNote = (t: string) => {
+    setNote(t)
+    setTimeout(() => setNote(''), 2500)
+  }
+  /** Тимчасове посилання (1 год) на оригінал: для великих файлів без копіювання. */
+  const link = async () => {
+    const r = await fetch(`${uploadUrl(a.id)}/link`, { method: 'POST', credentials: 'same-origin' })
+    const d = (await r.json().catch(() => ({}))) as { url?: string; error?: string }
+    if (!r.ok || !d.url) throw new Error(d.error ?? 'Не вдалося створити посилання')
+    return new URL(d.url, location.origin).href
+  }
+  const download = async () => {
+    setBusy('dl')
+    try {
+      const href = await link()
+      const el = document.createElement('a')
+      el.href = href
+      el.download = a.name
+      document.body.appendChild(el)
+      el.click()
+      el.remove()
+    } catch (e) {
+      flashNote((e as Error).message)
+    } finally {
+      setBusy('')
+    }
+  }
+  const copy = async () => {
+    setBusy('copy')
+    try {
+      await navigator.clipboard.writeText(await link())
+      flashNote('Посилання скопійовано, діє 1 годину')
+    } catch (e) {
+      flashNote((e as Error).message)
+    } finally {
+      setBusy('')
+    }
+  }
   return (
     <div className="att-file">
-      <a href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file-open">
-        <span className="att-file-icon" style={{ background: color }}>
-          <Icon size={18} />
+      <a href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file-open" title={a.name}>
+        <span className="att-file-icon" style={{ background: kind.color }}>
+          <kind.Icon size={19} />
+          {kind.ext && kind.ext.length <= 4 && <span className="att-ext">{kind.ext}</span>}
         </span>
         <span className="att-file-text">
           <span className="att-file-name">{a.name}</span>
           <span className="att-file-meta">
-            {label} · {formatSize(a.size)}
+            {note || (
+              <>
+                {kind.label} · {formatSize(a.size)}
+                {a.ref && <span className="att-ref"> · на Mac mini</span>}
+              </>
+            )}
           </span>
         </span>
       </a>
-      <a href={`${uploadUrl(a.id)}?download`} download={a.name} className="icon-btn" title="Завантажити" aria-label="Завантажити">
-        <Download size={16} />
-      </a>
+      <button type="button" className="icon-btn" title="Копіювати посилання (1 год)" aria-label="Копіювати посилання" disabled={!!busy} onClick={() => void copy()}>
+        {busy === 'copy' ? <Loader2 size={16} className="spin" /> : <Link2 size={16} />}
+      </button>
+      <button type="button" className="icon-btn" title="Завантажити" aria-label="Завантажити" disabled={!!busy} onClick={() => void download()}>
+        {busy === 'dl' ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
+      </button>
     </div>
   )
 }
@@ -135,7 +165,7 @@ function Attachments({ items, side }: { items: Attachment[]; side: 'user' | 'ass
           </a>
         ) : a.mime.startsWith('audio/') ? (
           <AudioPlayer key={a.id} a={a} />
-        ) : a.mime.startsWith('video/') ? (
+        ) : /^video\/(mp4|quicktime|webm)$/.test(a.mime) ? (
           <div key={a.id} className="att-media att-video">
             <video controls playsInline preload="metadata" src={uploadUrl(a.id)} />
             <FileCard a={a} />

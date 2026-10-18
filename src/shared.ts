@@ -7,6 +7,8 @@ export type Attachment = {
   name: string
   mime: string
   size: number
+  /** Великий файл лишився на Mac mini (не скопійовано); віддається за шляхом через тимчасове посилання. */
+  ref?: boolean
 }
 
 /** Одна подія з ходу виконання задачі Hermes, у порядку появи. */
@@ -93,7 +95,12 @@ export type Chat = {
   native?: boolean
   control?: ChatControl
   mode: ChatMode
+  /** Список, до якого користувач додав чат. */
+  listId?: string | null
 }
+
+/** Список чатів (як проєкти в ChatGPT). */
+export type ChatList = { id: string; name: string; color: string; position: number }
 
 export type ModelOptions = {
   current: { provider: string; model: string }
@@ -149,6 +156,7 @@ export type ServerEvent =
   | { type: 'message'; message: Message }
   | { type: 'chat'; chat: Chat }
   | { type: 'chat-deleted'; chatId: string }
+  | { type: 'lists'; lists: ChatList[] }
   /** Hermes змінив нотатки в базі знань. */
   | { type: 'kb'; paths: string[] }
 

@@ -6,7 +6,9 @@ import { basename, dirname, extname, join, resolve } from 'node:path'
 import type { Attachment } from '../src/shared.ts'
 import { UPLOAD_DIR, deleteUploadRow, insertUpload, orphanUploads } from './db.ts'
 
-const MAX_FILE = 500 * 1024 * 1024
+/** Більші файли не копіюємо: зберігаємо шлях і віддаємо оригінал за тимчасовим посиланням. */
+const REF_FROM = 25 * 1024 * 1024
+const MAX_FILE = 200 * 1024 * 1024 * 1024
 
 export const MIME: Record<string, string> = {
   '.png': 'image/png',
@@ -39,6 +41,45 @@ export const MIME: Record<string, string> = {
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   '.epub': 'application/epub+zip',
+  '.mobi': 'application/x-mobipocket-ebook',
+  '.fb2': 'application/x-fictionbook+xml',
+  '.mkv': 'video/x-matroska',
+  '.avi': 'video/x-msvideo',
+  '.wmv': 'video/x-ms-wmv',
+  '.flv': 'video/x-flv',
+  '.aiff': 'audio/aiff',
+  '.tar': 'application/x-tar',
+  '.gz': 'application/gzip',
+  '.tgz': 'application/gzip',
+  '.bz2': 'application/x-bzip2',
+  '.xz': 'application/x-xz',
+  '.7z': 'application/x-7z-compressed',
+  '.rar': 'application/vnd.rar',
+  '.dmg': 'application/x-apple-diskimage',
+  '.iso': 'application/x-iso9660-image',
+  '.img': 'application/octet-stream',
+  '.pkg': 'application/octet-stream',
+  '.apk': 'application/vnd.android.package-archive',
+  '.ipa': 'application/octet-stream',
+  '.doc': 'application/msword',
+  '.xls': 'application/vnd.ms-excel',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.key': 'application/x-iwork-keynote-sffkey',
+  '.pages': 'application/x-iwork-pages-sffpages',
+  '.numbers': 'application/x-iwork-numbers-sffnumbers',
+  '.odt': 'application/vnd.oasis.opendocument.text',
+  '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
+  '.rtf': 'application/rtf',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.woff2': 'font/woff2',
+  '.srt': 'text/plain',
+  '.vtt': 'text/vtt',
+  '.log': 'text/plain',
+  '.sqlite': 'application/vnd.sqlite3',
+  '.db': 'application/vnd.sqlite3',
+  '.gguf': 'application/octet-stream',
+  '.safetensors': 'application/octet-stream',
 }
 
 export const mimeOf = (name: string) => MIME[extname(name).toLowerCase()] ?? 'application/octet-stream'
@@ -50,6 +91,8 @@ export const CHAT_INSTRUCTIONS = [
   'put a line `MEDIA:/absolute/path/to/file` in your final answer, one line per file. The chat attaches the file',
   'to your message: audio and video get a player, images a preview, other files a download card.',
   'Do not paste the bare path or file contents instead, and do not explain how to open the file.',
+  'Any size is fine (even many GB): large files are not copied, the user downloads the original by a temporary link,',
+  'so never compress, split or move a file just to send it. Point MEDIA: at the file where it already is.',
   'Files the user attaches are saved on this Mac and listed with absolute paths in their message.',
 ].join(' ')
 
@@ -88,9 +131,19 @@ export function extractMedia(text: string): { paths: string[]; text: string } {
   return { paths: found, text: out }
 }
 
-/** Копія файлу в сховище чату (на APFS це миттєвий клон), щоб він жив, навіть якщо Hermes його прибере. */
+/**
+ * Файл для чату. Невеликий копіюємо (на APFS це миттєвий клон), щоб він жив, навіть якщо Hermes його прибере.
+ * Великий лишаємо на місці й пам'ятаємо шлях: завантажується оригінал за тимчасовим посиланням.
+ */
 export function importFile(path: string): Attachment {
   const id = randomBytes(9).toString('base64url')
+  const size = statSync(path).size
+  if (size >= REF_FROM) {
+    const name = basename(path)
+    const a: Attachment = { id, name, mime: mimeOf(name), size, ref: true }
+    insertUpload({ ...a, path })
+    return a
+  }
   const dir = join(UPLOAD_DIR, id)
   mkdirSync(dir, { recursive: true })
   const name = basename(path)

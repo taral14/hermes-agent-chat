@@ -13,7 +13,7 @@ import { ActionsContext, type MessageActions, MessageView } from './components/M
 import { GoalBar } from './components/GoalBar.tsx'
 import { ModelPicker } from './components/ModelPicker.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
-import type { Attachment, Chat, ChatMode, Message, ModelChoice, ModelOptions, ServerEvent } from './shared.ts'
+import type { Attachment, Chat, ChatList, ChatMode, Message, ModelChoice, ModelOptions, ServerEvent } from './shared.ts'
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
 const chatIdFromPath = () => /^\/c\/([\w-]+)/.exec(location.pathname)?.[1] ?? null
@@ -58,6 +58,9 @@ export default function App() {
   const [auth, setAuth] = useState<'unknown' | 'out' | 'in'>('unknown')
   const [username, setUsername] = useState('')
   const [chats, setChats] = useState<Chat[]>([])
+  const [lists, setLists] = useState<ChatList[]>([])
+  /** Список, у якому буде створено наступний новий чат. */
+  const [newListId, setNewListId] = useState<string | null>(null)
   const [currentId, setCurrentId] = useState<string | null>(chatIdFromPath)
   const [jobsRoute, setJobsRoute] = useState<JobsRoute | null>(jobsFromPath)
   const [kbRoute, setKbRoute] = useState<KbRoute | null>(kbFromPath)
@@ -128,6 +131,7 @@ export default function App() {
     void loadChats()
     api.models().then(setModels).catch(() => {})
     api.commands().then(setCommands).catch(() => {})
+    api.lists().then(setLists).catch(() => {})
   }, [auth, loadChats])
 
   useEffect(() => {
@@ -157,6 +161,8 @@ export default function App() {
         setMessages((all) => (all[e.message.chatId] ? { ...all, [e.message.chatId]: upsert(all[e.message.chatId]!, e.message) } : all))
       } else if (e.type === 'chat') {
         setChats((c) => sortChats([...c.filter((x) => x.id !== e.chat.id), e.chat]))
+      } else if (e.type === 'lists') {
+        setLists(e.lists)
       } else if (e.type === 'kb') {
         setKbVersion((v) => v + 1)
       } else if (e.type === 'chat-deleted') {
@@ -290,7 +296,7 @@ export default function App() {
         chatId: currentId ?? undefined,
         text,
         attachments: attachments.map((a) => a.id),
-        ...(currentId ? {} : { model: newModel, mode: newMode }),
+        ...(currentId ? {} : { model: newModel, mode: newMode, ...(newListId ? { listId: newListId } : {}) }),
       })
       setChats((c) => sortChats([...c.filter((x) => x.id !== r.chat.id), r.chat]))
       setMessages((m) => {
@@ -301,6 +307,7 @@ export default function App() {
       stick.current = true
       if (!currentId) {
         setNewModel(null)
+        setNewListId(null)
         navigate(r.chat.id)
       }
       return true
@@ -332,6 +339,7 @@ export default function App() {
   }
 
   const newChat = () => {
+    setNewListId(null)
     navigate(null)
     setTimeout(() => composer.current?.focus(), 0)
   }
@@ -464,6 +472,35 @@ export default function App() {
               setSecurity(true)
             }}
             onClose={() => setSidebar(false)}
+            lists={lists}
+            onMoveToList={(id, listId) => {
+              setChats((c) => c.map((x) => (x.id === id ? { ...x, listId } : x)))
+              api.patchChat(id, { listId }).catch(flash)
+            }}
+            onCreateList={async (name) => {
+              try {
+                const l = await api.createList(name)
+                setLists((ls) => (ls.some((x) => x.id === l.id) ? ls : [...ls, l]))
+                return l
+              } catch (e) {
+                flash(e)
+                return null
+              }
+            }}
+            onRenameList={(id, name) => {
+              setLists((ls) => ls.map((l) => (l.id === id ? { ...l, name } : l)))
+              api.renameList(id, name).catch(flash)
+            }}
+            onDeleteList={(id) => {
+              setLists((ls) => ls.filter((l) => l.id !== id))
+              setChats((c) => c.map((x) => (x.listId === id ? { ...x, listId: null } : x)))
+              api.deleteList(id).catch(flash)
+            }}
+            onNewInList={(listId) => {
+              setNewListId(listId)
+              navigate(null)
+              setTimeout(() => composer.current?.focus(), 0)
+            }}
             onRename={(id, title) => {
               setChats((c) => c.map((x) => (x.id === id ? { ...x, title } : x)))
               api.patchChat(id, { title }).catch(flash)
@@ -517,6 +554,12 @@ export default function App() {
         {header}
         {empty ? (
           <div className="welcome">
+            {!currentId && newListId && lists.find((l) => l.id === newListId) && (
+              <div className="welcome-list">
+                <span className="welcome-list-dot" style={{ background: lists.find((l) => l.id === newListId)!.color }} />
+                Новий чат у списку «{lists.find((l) => l.id === newListId)!.name}»
+              </div>
+            )}
             <h1 className="welcome-title">{list ? 'Чим можу допомогти?' : currentId ? '' : 'Чим можу допомогти?'}</h1>
             {composerEl}
             {!currentId && (

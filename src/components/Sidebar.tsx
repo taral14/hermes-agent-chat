@@ -2,12 +2,18 @@ import {
   Bell,
   BookOpen,
   CalendarClock,
+  Check,
+  ChevronRight,
+  Folder,
+  FolderMinus,
+  FolderPlus,
   LogOut,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
   Pin,
   PinOff,
+  Plus,
   Search,
   Settings,
   ShieldCheck,
@@ -15,12 +21,13 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import type { Chat } from '../shared.ts'
+import type { Chat, ChatList } from '../shared.ts'
 
 type Props = {
   chats: Chat[]
+  lists: ChatList[]
   currentId: string | null
   username: string
   narrow: boolean
@@ -29,6 +36,11 @@ type Props = {
   onRename: (id: string, title: string) => void
   onPin: (id: string, pinned: boolean) => void
   onDelete: (id: string) => void
+  onMoveToList: (chatId: string, listId: string | null) => void
+  onCreateList: (name: string) => Promise<ChatList | null>
+  onRenameList: (id: string, name: string) => void
+  onDeleteList: (id: string) => void
+  onNewInList: (listId: string) => void
   onClose: () => void
   onLogout: () => void
   onJobs: () => void
@@ -51,82 +63,120 @@ function groupOf(ts: number): string {
   return d.toLocaleDateString('uk-UA', { month: 'long', year: 'numeric' })
 }
 
-/** Нижня шторка з діями над чатом (телефон, довге натискання). */
-function ChatSheet({ chat, onClose, onRename, onPin, onDelete }: {
-  chat: Chat
+// ---------- Меню: на телефоні нижня шторка, на комп'ютері випадне ----------
+
+type Action = { label: string; icon: ReactNode; danger?: boolean; checked?: boolean; run: () => void }
+
+function ActionMenu({ narrow, title, note, actions, onClose }: {
+  narrow: boolean
+  title?: string
+  note?: string
+  actions: Action[]
   onClose: () => void
-  onRename: () => void
-  onPin: () => void
-  onDelete: () => void
 }) {
-  const [confirm, setConfirm] = useState(false)
-  return (
-    createPortal(
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet action-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grip" />
-        <div className="action-title">{chat.title || 'Новий чат'}</div>
-        {confirm ? (
-          <>
-            <div className="action-note">Видалити чат і його сесію в Hermes?</div>
-            <button type="button" className="action-row danger" onClick={onDelete}>
-              <Trash2 size={20} /> Так, видалити
+  if (narrow) {
+    return createPortal(
+      <div className="sheet-backdrop" onClick={onClose}>
+        <div className="sheet action-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet-grip" />
+          {title && <div className="action-title">{title}</div>}
+          {note && <div className="action-note">{note}</div>}
+          {actions.map((a) => (
+            <button key={a.label} type="button" className={`action-row ${a.danger ? 'danger' : ''}`} onClick={a.run}>
+              {a.icon} <span className="action-label">{a.label}</span>
+              {a.checked && <Check size={20} className="action-check" />}
             </button>
-            <button type="button" className="action-row" onClick={() => setConfirm(false)}>
-              <X size={20} /> Скасувати
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" className="action-row" onClick={onRename}>
-              <Pencil size={20} /> Перейменувати
-            </button>
-            <button type="button" className="action-row" onClick={onPin}>
-              {chat.pinned ? <PinOff size={20} /> : <Pin size={20} />} {chat.pinned ? 'Відкріпити' : 'Закріпити'}
-            </button>
-            <button type="button" className="action-row danger" onClick={() => setConfirm(true)}>
-              <Trash2 size={20} /> Видалити
-            </button>
-          </>
-        )}
-      </div>
-    </div>,
-    document.body,
+          ))}
+        </div>
+      </div>,
+      document.body,
     )
+  }
+  return (
+    <div className="menu chat-menu">
+      {note && <div className="menu-note">{note}</div>}
+      {actions.map((a) => (
+        <button key={a.label} type="button" className={`menu-item ${a.danger ? 'danger' : ''}`} onClick={a.run}>
+          {a.icon} <span className="menu-item-main">{a.label}</span>
+          {a.checked && <Check size={16} />}
+        </button>
+      ))}
+    </div>
   )
 }
 
-function ChatItem({ chat, active, narrow, onSelect, onRename, onPin, onDelete }: {
+/** Довге натискання (телефон) або правий клік відкривають меню. */
+function usePress(open: () => void) {
+  const press = useRef<{ timer: ReturnType<typeof setTimeout> | null; fired: boolean }>({ timer: null, fired: false })
+  const stop = () => {
+    if (press.current.timer) clearTimeout(press.current.timer)
+    press.current.timer = null
+  }
+  return {
+    fired: () => {
+      const f = press.current.fired
+      press.current.fired = false
+      return f
+    },
+    handlers: {
+      onTouchStart: () => {
+        press.current.fired = false
+        press.current.timer = setTimeout(() => {
+          press.current.fired = true
+          navigator.vibrate?.(10)
+          open()
+        }, 450)
+      },
+      onTouchMove: stop,
+      onTouchEnd: stop,
+      onContextMenu: (e: ReactMouseEvent) => {
+        e.preventDefault()
+        open()
+      },
+    },
+  }
+}
+
+function useOutside(active: boolean, box: RefObject<HTMLElement | null>, close: () => void) {
+  useEffect(() => {
+    if (!active) return
+    const on = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) close()
+    }
+    document.addEventListener('mousedown', on)
+    return () => document.removeEventListener('mousedown', on)
+  }, [active, box, close])
+}
+
+// ---------- Чат ----------
+
+type ChatItemProps = {
   chat: Chat
   active: boolean
   narrow: boolean
+  lists: ChatList[]
+  indent?: boolean
   onSelect: () => void
   onRename: (t: string) => void
   onPin: () => void
   onDelete: () => void
-}) {
-  const [menu, setMenu] = useState(false)
+  onMove: (listId: string | null) => void
+}
+
+function ChatItem({ chat, active, narrow, lists, indent, onSelect, onRename, onPin, onDelete, onMove }: ChatItemProps) {
+  const [menu, setMenu] = useState<null | 'main' | 'lists' | 'confirm'>(null)
   const [editing, setEditing] = useState(false)
-  const [confirm, setConfirm] = useState(false)
   const [title, setTitle] = useState(chat.title)
   const box = useRef<HTMLDivElement>(null)
-  const press = useRef<{ timer: ReturnType<typeof setTimeout> | null; fired: boolean }>({ timer: null, fired: false })
-
-  useEffect(() => {
-    if (!menu || narrow) return
-    const close = (e: MouseEvent) => {
-      if (box.current?.contains(e.target as Node)) return
-      setMenu(false)
-      setConfirm(false)
-    }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [menu, narrow])
+  const close = () => setMenu(null)
+  useOutside(Boolean(menu) && !narrow, box, close)
+  const press = usePress(() => setMenu('main'))
+  const sz = narrow ? 20 : 16
 
   if (editing) {
     return (
       <form
-        className="chat-item is-editing"
+        className={`chat-item is-editing ${indent ? 'is-indented' : ''}`}
         onSubmit={(e) => {
           e.preventDefault()
           if (title.trim()) onRename(title.trim())
@@ -138,117 +188,175 @@ function ChatItem({ chat, active, narrow, onSelect, onRename, onPin, onDelete }:
     )
   }
 
-  const stopPress = () => {
-    if (press.current.timer) clearTimeout(press.current.timer)
-    press.current.timer = null
+  const inList = lists.find((l) => l.id === chat.listId)
+  const run = (fn: () => void) => () => {
+    close()
+    fn()
   }
-  const close = () => setMenu(false)
+  let actions: Action[]
+  if (menu === 'confirm') {
+    actions = [
+      { label: 'Так, видалити', icon: <Trash2 size={sz} />, danger: true, run: run(onDelete) },
+      { label: 'Скасувати', icon: <X size={sz} />, run: () => setMenu('main') },
+    ]
+  } else if (menu === 'lists') {
+    actions = lists.map((l) => ({
+      label: l.name,
+      icon: <Folder size={sz} style={{ color: l.color }} />,
+      checked: chat.listId === l.id,
+      run: run(() => onMove(l.id)),
+    }))
+    if (chat.listId) actions.push({ label: 'Прибрати зі списку', icon: <FolderMinus size={sz} />, run: run(() => onMove(null)) })
+  } else {
+    actions = [
+      {
+        label: 'Перейменувати',
+        icon: <Pencil size={sz} />,
+        run: run(() => {
+          setTitle(chat.title)
+          setEditing(true)
+        }),
+      },
+      { label: chat.pinned ? 'Відкріпити' : 'Закріпити', icon: chat.pinned ? <PinOff size={sz} /> : <Pin size={sz} />, run: run(onPin) },
+    ]
+    if (lists.length) actions.push({ label: inList ? `У списку «${inList.name}»` : 'Додати до списку', icon: <FolderPlus size={sz} />, run: () => setMenu('lists') })
+    actions.push({ label: 'Видалити', icon: <Trash2 size={sz} />, danger: true, run: () => setMenu('confirm') })
+  }
 
   return (
-    <div ref={box} className={`chat-item ${active ? 'is-active' : ''} ${menu && !narrow ? 'has-menu' : ''}`}>
+    <div ref={box} className={`chat-item ${active ? 'is-active' : ''} ${menu && !narrow ? 'has-menu' : ''} ${indent ? 'is-indented' : ''}`}>
       <button
         type="button"
         className="chat-link"
         title={chat.title}
         onClick={() => {
-          if (press.current.fired) {
-            press.current.fired = false
-            return
-          }
-          onSelect()
+          if (!press.fired()) onSelect()
         }}
-        // Довге натискання на телефоні відкриває дії, як у ChatGPT.
-        onTouchStart={() => {
-          press.current.fired = false
-          press.current.timer = setTimeout(() => {
-            press.current.fired = true
-            navigator.vibrate?.(10)
-            setMenu(true)
-          }, 450)
-        }}
-        onTouchMove={stopPress}
-        onTouchEnd={stopPress}
-        onContextMenu={(e: ReactMouseEvent) => {
-          e.preventDefault()
-          setMenu(true)
-        }}
+        {...press.handlers}
       >
         {chat.running && <span className="running-dot" aria-label="Працює" />}
         <span className="chat-title">{chat.title || 'Новий чат'}</span>
       </button>
       {!narrow && (
-        <button type="button" className="chat-more" aria-label="Дії" onClick={() => setMenu((m) => !m)}>
+        <button type="button" className="chat-more" aria-label="Дії" onClick={() => setMenu((m) => (m ? null : 'main'))}>
           <MoreHorizontal size={16} />
         </button>
       )}
-      {menu && narrow && (
-        <ChatSheet
-          chat={chat}
+      {menu && (
+        <ActionMenu
+          narrow={narrow}
+          title={chat.title || 'Новий чат'}
+          note={menu === 'confirm' ? 'Видалити чат і його сесію в Hermes?' : menu === 'lists' ? 'Перемістити до списку' : undefined}
+          actions={actions}
           onClose={close}
-          onRename={() => {
-            close()
-            setTitle(chat.title)
-            setEditing(true)
-          }}
-          onPin={() => {
-            close()
-            onPin()
-          }}
-          onDelete={() => {
-            close()
-            onDelete()
-          }}
         />
       )}
-      {menu && !narrow && (
-        <div className="menu chat-menu">
-          {confirm ? (
-            <>
-              <div className="menu-note">Видалити чат і його сесію в Hermes?</div>
-              <button
-                type="button"
-                className="menu-item danger"
-                onClick={() => {
-                  close()
-                  onDelete()
-                }}
-              >
-                <Trash2 size={16} /> Так, видалити
-              </button>
-              <button type="button" className="menu-item" onClick={() => setConfirm(false)}>
-                <X size={16} /> Скасувати
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="menu-item"
-                onClick={() => {
-                  close()
-                  setTitle(chat.title)
-                  setEditing(true)
-                }}
-              >
-                <Pencil size={16} /> Перейменувати
-              </button>
-              <button
-                type="button"
-                className="menu-item"
-                onClick={() => {
-                  close()
-                  onPin()
-                }}
-              >
-                {chat.pinned ? <PinOff size={16} /> : <Pin size={16} />} {chat.pinned ? 'Відкріпити' : 'Закріпити'}
-              </button>
-              <button type="button" className="menu-item danger" onClick={() => setConfirm(true)}>
-                <Trash2 size={16} /> Видалити
-              </button>
-            </>
-          )}
-        </div>
-      )}
+    </div>
+  )
+}
+
+// ---------- Список ----------
+
+const CLOSED_KEY = 'chat-lists-closed'
+function readClosed(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]') as string[])
+  } catch {
+    return new Set()
+  }
+}
+
+function ListBlock({ list, chats, p, closed, toggle, item }: {
+  list: ChatList
+  chats: Chat[]
+  p: Props
+  closed: boolean
+  toggle: () => void
+  item: (c: Chat, indent: boolean) => ReactNode
+}) {
+  const [menu, setMenu] = useState<null | 'main' | 'confirm'>(null)
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(list.name)
+  const box = useRef<HTMLDivElement>(null)
+  const close = () => setMenu(null)
+  useOutside(Boolean(menu) && !p.narrow, box, close)
+  const press = usePress(() => setMenu('main'))
+  const sz = p.narrow ? 20 : 16
+  const run = (fn: () => void) => () => {
+    close()
+    fn()
+  }
+
+  return (
+    <div className="list-block">
+      <div ref={box} className={`chat-item list-row ${menu && !p.narrow ? 'has-menu' : ''}`}>
+        {editing ? (
+          <form
+            className="list-edit"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (name.trim()) p.onRenameList(list.id, name.trim())
+              setEditing(false)
+            }}
+          >
+            <Folder size={sz} style={{ color: list.color }} />
+            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setEditing(false)} />
+          </form>
+        ) : (
+          <button
+            type="button"
+            className="chat-link"
+            onClick={() => {
+              if (!press.fired()) toggle()
+            }}
+            {...press.handlers}
+          >
+            <Folder size={sz} className="list-icon" style={{ color: list.color }} fill={list.color} fillOpacity={0.2} />
+            <span className="chat-title">{list.name}</span>
+            {chats.length > 0 && <span className="list-count">{chats.length}</span>}
+            <ChevronRight size={15} className={`list-chevron ${closed ? '' : 'is-open'}`} />
+          </button>
+        )}
+        {!p.narrow && !editing && (
+          <>
+            <button type="button" className="chat-more" title="Новий чат у списку" aria-label="Новий чат у списку" onClick={() => p.onNewInList(list.id)}>
+              <Plus size={16} />
+            </button>
+            <button type="button" className="chat-more" aria-label="Дії зі списком" onClick={() => setMenu((m) => (m ? null : 'main'))}>
+              <MoreHorizontal size={16} />
+            </button>
+          </>
+        )}
+        {menu && (
+          <ActionMenu
+            narrow={p.narrow}
+            title={list.name}
+            note={menu === 'confirm' ? 'Видалити список? Чати з нього лишаться в «Нещодавніх».' : undefined}
+            actions={
+              menu === 'confirm'
+                ? [
+                    { label: 'Так, видалити список', icon: <Trash2 size={sz} />, danger: true, run: run(() => p.onDeleteList(list.id)) },
+                    { label: 'Скасувати', icon: <X size={sz} />, run: () => setMenu('main') },
+                  ]
+                : [
+                    { label: 'Новий чат у списку', icon: <SquarePen size={sz} />, run: run(() => p.onNewInList(list.id)) },
+                    {
+                      label: 'Перейменувати',
+                      icon: <Pencil size={sz} />,
+                      run: run(() => {
+                        setName(list.name)
+                        setEditing(true)
+                      }),
+                    },
+                    { label: 'Видалити список', icon: <Trash2 size={sz} />, danger: true, run: () => setMenu('confirm') },
+                  ]
+            }
+            onClose={close}
+          />
+        )}
+      </div>
+      {!closed && chats.map((c) => item(c, true))}
+      {!closed && chats.length === 0 && <div className="list-empty">Порожньо. Додай чат через його меню.</div>}
     </div>
   )
 }
@@ -259,8 +367,7 @@ function SettingsSheet({ username, onClose, items }: {
   onClose: () => void
   items: { label: string; icon: ReactNode; danger?: boolean; run: () => void }[]
 }) {
-  return (
-    createPortal(
+  return createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet action-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grip" />
@@ -284,7 +391,6 @@ function SettingsSheet({ username, onClose, items }: {
       </div>
     </div>,
     document.body,
-    )
   )
 }
 
@@ -292,24 +398,61 @@ export function Sidebar(p: Props) {
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [settings, setSettings] = useState(false)
+  const [closedLists, setClosedLists] = useState(readClosed)
+  const [newList, setNewList] = useState<string | null>(null)
+
+  const toggleList = (id: string) =>
+    setClosedLists((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      try {
+        localStorage.setItem(CLOSED_KEY, JSON.stringify([...next]))
+      } catch {
+        /* приватний режим */
+      }
+      return next
+    })
+
+  const q = query.trim().toLowerCase()
   const groups = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const listIds = new Set(p.lists.map((l) => l.id))
     const list = q ? p.chats.filter((c) => c.title.toLowerCase().includes(q)) : p.chats
     const out: [string, Chat[]][] = []
     for (const c of list) {
-      // Телефон: як у ChatGPT — «Закріплено» й «Нещодавні». Комп'ютер: групи за датою.
-      const g = c.pinned ? 'Закріплено' : p.narrow ? 'Нещодавні' : groupOf(c.updatedAt)
+      // Без пошуку чати зі списків показуємо лише у своєму списку; закріплені — у «Закріплено».
+      if (!q && !c.pinned && c.listId && listIds.has(c.listId)) continue
+      const g = c.pinned ? 'Закріплено' : p.narrow || q ? 'Нещодавні' : groupOf(c.updatedAt)
       const last = out[out.length - 1]
       if (last && last[0] === g) last[1].push(c)
       else out.push([g, [c]])
     }
     return out
-  }, [p.chats, query, p.narrow])
+  }, [p.chats, q, p.narrow, p.lists])
 
   const toggleSearch = () => {
     setSearching((s) => !s)
     setQuery('')
   }
+
+  const item = (c: Chat, indent = false) => (
+    <ChatItem
+      key={c.id}
+      chat={c}
+      indent={indent}
+      narrow={p.narrow}
+      lists={p.lists}
+      active={c.id === p.currentId}
+      onSelect={() => p.onSelect(c.id)}
+      onRename={(t) => p.onRename(c.id, t)}
+      onPin={() => p.onPin(c.id, !c.pinned)}
+      onDelete={() => p.onDelete(c.id)}
+      onMove={(l) => p.onMoveToList(c.id, l)}
+    />
+  )
+
+  const pinned = groups.find(([g]) => g === 'Закріплено')
+  const rest = groups.filter(([g]) => g !== 'Закріплено')
 
   return (
     <nav className="sidebar">
@@ -364,24 +507,72 @@ export function Sidebar(p: Props) {
             </button>
           </div>
         )}
-        {groups.map(([g, list]) => (
-          <div key={g} className="chat-group">
-            <div className="chat-group-title">{g}</div>
-            {list.map((c) => (
-              <ChatItem
-                key={c.id}
-                chat={c}
-                narrow={p.narrow}
-                active={c.id === p.currentId}
-                onSelect={() => p.onSelect(c.id)}
-                onRename={(t) => p.onRename(c.id, t)}
-                onPin={() => p.onPin(c.id, !c.pinned)}
-                onDelete={() => p.onDelete(c.id)}
+
+        {pinned && (
+          <div className="chat-group">
+            <div className="chat-group-title">Закріплено</div>
+            {pinned[1].map((c) => item(c))}
+          </div>
+        )}
+
+        {!q && (
+          <div className="chat-group">
+            <div className="chat-group-title group-with-action">
+              <span>Списки</span>
+              <button type="button" className="group-action" aria-label="Новий список" title="Новий список" onClick={() => setNewList('')}>
+                <Plus size={p.narrow ? 20 : 15} />
+              </button>
+            </div>
+            {newList !== null && (
+              <form
+                className="chat-item is-editing list-new"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const name = newList.trim()
+                  setNewList(null)
+                  if (name) void p.onCreateList(name)
+                }}
+              >
+                <Folder size={p.narrow ? 20 : 16} />
+                <input
+                  autoFocus
+                  placeholder="Назва списку"
+                  value={newList}
+                  onChange={(e) => setNewList(e.target.value)}
+                  onBlur={() => {
+                    if (!newList.trim()) setNewList(null)
+                  }}
+                  onKeyDown={(e) => e.key === 'Escape' && setNewList(null)}
+                />
+              </form>
+            )}
+            {p.lists.map((l) => (
+              <ListBlock
+                key={l.id}
+                list={l}
+                chats={p.chats.filter((c) => c.listId === l.id && !c.pinned)}
+                p={p}
+                closed={closedLists.has(l.id)}
+                toggle={() => toggleList(l.id)}
+                item={item}
               />
             ))}
+            {p.lists.length === 0 && newList === null && (
+              <button type="button" className="list-hint" onClick={() => setNewList('')}>
+                Створи список, щоб групувати чати
+              </button>
+            )}
+          </div>
+        )}
+
+        {rest.map(([g, list]) => (
+          <div key={g} className="chat-group">
+            <div className="chat-group-title">{g}</div>
+            {list.map((c) => item(c))}
           </div>
         ))}
-        {!groups.length && <div className="chat-empty">{query ? 'Нічого не знайдено' : 'Тут з’являться твої чати'}</div>}
+        {!groups.length && q && <div className="chat-empty">Нічого не знайдено</div>}
+        {!p.chats.length && !q && <div className="chat-empty">Тут з’являться твої чати</div>}
       </div>
       {p.narrow ? (
         <div className="m-foot">

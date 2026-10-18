@@ -1,4 +1,4 @@
-import type { Attachment, Chat, ChatMode, Job, JobRun, Message, ModelChoice, ModelOptions } from './shared.ts'
+import type { Attachment, Chat, ChatList, ChatMode, Job, JobRun, Message, ModelChoice, ModelOptions } from './shared.ts'
 
 export class ApiError extends Error {
   status: number
@@ -29,10 +29,10 @@ export const api = {
   logout: () => req('POST', '/api/logout'),
   chats: () => req<Chat[]>('GET', '/api/chats'),
   chat: (id: string) => req<{ chat: Chat; messages: Message[] }>('GET', `/api/chats/${id}`),
-  patchChat: (id: string, patch: { title?: string; pinned?: boolean; model?: ModelChoice; mode?: ChatMode }) =>
+  patchChat: (id: string, patch: { title?: string; pinned?: boolean; model?: ModelChoice; mode?: ChatMode; listId?: string | null }) =>
     req<Chat>('PATCH', `/api/chats/${id}`, patch),
   deleteChat: (id: string) => req('DELETE', `/api/chats/${id}`),
-  send: (body: { chatId?: string; text: string; attachments: string[]; model?: ModelChoice; mode?: ChatMode }) =>
+  send: (body: { chatId?: string; text: string; attachments: string[]; model?: ModelChoice; mode?: ChatMode; listId?: string }) =>
     req<{ chat: Chat; messages: Message[] }>('POST', '/api/messages', body),
   stop: (messageId: string) => req('POST', `/api/messages/${messageId}/stop`),
   steer: (messageId: string, text: string) => req('POST', `/api/messages/${messageId}/steer`, { text }),
@@ -46,6 +46,10 @@ export const api = {
   branch: (messageId: string) => req<{ chatId: string }>('POST', `/api/messages/${messageId}/branch`),
   commands: () => req<CommandInfo[]>('GET', '/api/commands'),
   control: (chatId: string, command: string) => req<{ output: string }>('POST', `/api/chats/${chatId}/control`, { command }),
+  lists: () => req<ChatList[]>('GET', '/api/lists'),
+  createList: (name: string) => req<ChatList>('POST', '/api/lists', { name }),
+  renameList: (id: string, name: string) => req<ChatList[]>('PATCH', `/api/lists/${id}`, { name }),
+  deleteList: (id: string) => req('DELETE', `/api/lists/${id}`),
   jobs: () => req<Job[]>('GET', '/api/jobs'),
   job: (id: string) => req<Job>('GET', `/api/jobs/${id}`),
   createJob: (body: JobInput) => req<Job>('POST', '/api/jobs', body),

@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Attachment, Chat, ChatMode, Message, ModelChoice, Part, PushSettings, Usage } from '../src/shared.ts'
+import type { Attachment, Chat, ChatList, ChatMode, Message, ModelChoice, Part, PushSettings, Usage } from '../src/shared.ts'
 
 export type { PushSettings }
 
@@ -78,6 +78,10 @@ for (const sql of [
   `ALTER TABLE chats ADD COLUMN engine TEXT NOT NULL DEFAULT 'api'`,
   `ALTER TABLE chats ADD COLUMN control TEXT`,
   `ALTER TABLE chats ADD COLUMN mode TEXT NOT NULL DEFAULT 'auto'`,
+  `ALTER TABLE chats ADD COLUMN list_id TEXT`,
+  `ALTER TABLE uploads ADD COLUMN ref INTEGER NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS download_links (token TEXT PRIMARY KEY, upload_id TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS lists (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
 ]) {
   try {
     db.exec(sql)
@@ -112,6 +116,7 @@ function toChat(r: Row): ChatRow {
     running: Boolean(r.running),
     engine: str(r.engine) === 'native' ? 'native' : 'api',
     mode: (['ask', 'auto', 'plan'].includes(str(r.mode)) ? str(r.mode) : 'auto') as ChatMode,
+    listId: r.list_id == null ? null : str(r.list_id),
     control: json<Chat['control']>(r.control, null),
   }
 }
@@ -181,7 +186,7 @@ export function deleteMessagesFrom(chatId: string, createdAt: number) {
 
 export function updateChat(
   id: string,
-  patch: { title?: string; titleSource?: string; pinned?: boolean; model?: ModelChoice; touch?: boolean; sessionId?: string; control?: Chat['control']; mode?: ChatMode },
+  patch: { title?: string; titleSource?: string; pinned?: boolean; model?: ModelChoice; touch?: boolean; sessionId?: string; control?: Chat['control']; mode?: ChatMode; listId?: string | null },
 ) {
   const sets: string[] = []
   const args: (string | number | null)[] = []
@@ -204,6 +209,10 @@ export function updateChat(
   if (patch.sessionId !== undefined) {
     sets.push('session_id = ?')
     args.push(patch.sessionId)
+  }
+  if (patch.listId !== undefined) {
+    sets.push('list_id = ?')
+    args.push(patch.listId)
   }
   if (patch.mode !== undefined) {
     sets.push('mode = ?')
@@ -290,19 +299,34 @@ export function saveMessage(m: MessageRow) {
 export type UploadRow = Attachment & { path: string }
 
 export function insertUpload(u: UploadRow) {
-  db.prepare('INSERT INTO uploads (id, name, mime, size, path, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+  db.prepare('INSERT INTO uploads (id, name, mime, size, path, ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
     u.id,
     u.name,
     u.mime,
     u.size,
     u.path,
+    u.ref ? 1 : 0,
     Date.now(),
   )
 }
 
+/** Тимчасове посилання на завантаження (без входу, до expires). */
+export function createDownloadLink(token: string, uploadId: string, expiresAt: number) {
+  db.prepare('DELETE FROM download_links WHERE expires_at < ?').run(Date.now())
+  db.prepare('INSERT INTO download_links (token, upload_id, expires_at) VALUES (?, ?, ?)').run(token, uploadId, expiresAt)
+}
+
+export function resolveDownloadLink(token: string): UploadRow | null {
+  const r = db.prepare('SELECT upload_id, expires_at FROM download_links WHERE token = ?').get(token) as
+    | { upload_id: string; expires_at: number }
+    | undefined
+  if (!r || r.expires_at < Date.now()) return null
+  return getUpload(r.upload_id)
+}
+
 export function getUpload(id: string): UploadRow | null {
   const r = db.prepare('SELECT * FROM uploads WHERE id = ?').get(id)
-  return r ? { id: str(r.id), name: str(r.name), mime: str(r.mime), size: Number(r.size), path: str(r.path) } : null
+  return r ? { id: str(r.id), name: str(r.name), mime: str(r.mime), size: Number(r.size), path: str(r.path), ...(r.ref ? { ref: true } : {}) } : null
 }
 
 export type PushSub = { endpoint: string; keys: { p256dh: string; auth: string }; settings: PushSettings; ua: string }
@@ -414,11 +438,40 @@ export function orphanUploads(minAgeMs: number): UploadRow[] {
     .prepare('SELECT * FROM uploads WHERE created_at < ?')
     .all(Date.now() - minAgeMs)
     .filter((r) => !used.has(str(r.id)))
-    .map((r) => ({ id: str(r.id), name: str(r.name), mime: str(r.mime), size: Number(r.size), path: str(r.path) }))
+    .map((r) => ({ id: str(r.id), name: str(r.name), mime: str(r.mime), size: Number(r.size), path: str(r.path), ...(r.ref ? { ref: true } : {}) }))
 }
 
 export function deleteUploadRow(id: string) {
   db.prepare('DELETE FROM uploads WHERE id = ?').run(id)
+}
+
+// ---------- Списки чатів ----------
+
+const LIST_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#6366f1']
+
+function toList(r: Row): ChatList {
+  return { id: str(r.id), name: str(r.name), color: str(r.color), position: Number(r.position) }
+}
+
+export function listLists(): ChatList[] {
+  return db.prepare('SELECT * FROM lists ORDER BY position, created_at').all().map(toList)
+}
+
+export function createList(id: string, name: string): ChatList {
+  const n = (db.prepare('SELECT COUNT(*) AS n FROM lists').get() as { n: number }).n
+  db.prepare('INSERT INTO lists (id, name, color, position, created_at) VALUES (?, ?, ?, ?, ?)').run(id, name, LIST_COLORS[n % LIST_COLORS.length]!, n, Date.now())
+  return toList(db.prepare('SELECT * FROM lists WHERE id = ?').get(id)!)
+}
+
+export function updateList(id: string, patch: { name?: string; color?: string }) {
+  if (patch.name !== undefined) db.prepare('UPDATE lists SET name = ? WHERE id = ?').run(patch.name, id)
+  if (patch.color !== undefined) db.prepare('UPDATE lists SET color = ? WHERE id = ?').run(patch.color, id)
+}
+
+/** Видалення списку не видаляє чати: вони повертаються в «Нещодавні». */
+export function deleteList(id: string) {
+  db.prepare('UPDATE chats SET list_id = NULL WHERE list_id = ?').run(id)
+  db.prepare('DELETE FROM lists WHERE id = ?').run(id)
 }
 
 export function closeDb() {

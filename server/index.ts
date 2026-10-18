@@ -8,6 +8,13 @@ import type { Attachment, ChatMode, ModelChoice, ServerEvent } from '../src/shar
 import {
   DATA_DIR,
   DEFAULT_PUSH,
+  type UploadRow,
+  createDownloadLink,
+  resolveDownloadLink,
+  createList,
+  deleteList,
+  listLists,
+  updateList,
   getMessage,
   type PasskeyRow,
   deletePasskey,
@@ -227,7 +234,7 @@ async function buildInput(text: string, attachments: Attachment[]): Promise<Inpu
   return [{ type: 'text', text: (text || 'Подивись прикріплені файли.') + note }, ...parts]
 }
 
-async function sendMessage(body: { chatId?: string; text?: string; attachments?: string[]; model?: ModelChoice; mode?: string }) {
+async function sendMessage(body: { chatId?: string; text?: string; attachments?: string[]; model?: ModelChoice; mode?: string; listId?: string }) {
   const text = String(body.text ?? '').trim()
   const attachments: Attachment[] = (body.attachments ?? [])
     .map((id) => getUpload(String(id)))
@@ -241,7 +248,12 @@ async function sendMessage(body: { chatId?: string; text?: string; attachments?:
     // Нові чати — на рідному протоколі Hermes; сесія створиться при відправці.
     const id = newId()
     chat = createChat(id, '', body.model ?? null, 'native')
-    updateChat(id, { title: shortTitle(text || attachments[0]!.name), titleSource: 'auto', ...(isMode(body.mode) ? { mode: body.mode } : {}) })
+    updateChat(id, {
+      title: shortTitle(text || attachments[0]!.name),
+      titleSource: 'auto',
+      ...(isMode(body.mode) ? { mode: body.mode } : {}),
+      ...(body.listId && listLists().some((l) => l.id === body.listId) ? { listId: body.listId } : {}),
+    })
   } else if (body.model !== undefined) {
     updateChat(chat.id, { model: body.model })
   }
@@ -330,6 +342,65 @@ const EXT_MIME: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.webmanifest': 'application/manifest+json',
   '.webp': 'image/webp',
+}
+
+// ---------- Віддача файлів ----------
+
+const LINK_TTL = 60 * 60_000
+
+/**
+ * Файл частинами (Range): аудіо й відео в Safari, докачування великих файлів. Великі файли — це оригінали на
+ * Mac mini, вони читаються потоком без копіювання.
+ */
+function serveFile(req: IncomingMessage, res: ServerResponse, u: UploadRow, forceDownload: boolean, privateCache = true) {
+  const inline = /^(image|audio|video)\//.test(u.mime) || u.mime === 'application/pdf' || u.mime.startsWith('text/plain')
+  const download = forceDownload || !inline
+  const size = statSync(u.path).size
+  const headers: Record<string, string> = {
+    'Content-Type': u.mime === 'text/plain' ? 'text/plain; charset=utf-8' : u.mime,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': privateCache ? 'private, max-age=31536000, immutable' : 'no-store',
+    'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(u.name)}`,
+    'X-Content-Type-Options': 'nosniff',
+  }
+  // Завантажені й згенеровані файли не мають права виконувати скрипти на нашому домені (SVG тощо).
+  // PDF лишаємо без sandbox, інакше браузер не відкриє свій переглядач.
+  if (u.mime !== 'application/pdf') {
+    headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox"
+  }
+  const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''))
+  if (range && (range[1] || range[2])) {
+    let start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]))
+    let end = range[1] && range[2] ? Number(range[2]) : size - 1
+    end = Math.min(end, size - 1)
+    if (start > end || start >= size) {
+      res.writeHead(416, { 'Content-Range': `bytes */${size}` })
+      res.end()
+      return
+    }
+    start = Math.max(0, start)
+    res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': String(end - start + 1) })
+    const stream = createReadStream(u.path, { start, end })
+    res.on('close', () => stream.destroy())
+    stream.pipe(res)
+    return
+  }
+  res.writeHead(200, { ...headers, 'Content-Length': String(size) })
+  if (req.method === 'HEAD') return void res.end()
+  const stream = createReadStream(u.path)
+  res.on('close', () => stream.destroy())
+  stream.pipe(res)
+}
+
+/** /dl/<токен>/<назва> — тимчасове посилання без входу: завантаження великого файлу з Mac mini. */
+function serveDownloadLink(req: IncomingMessage, res: ServerResponse, token: string) {
+  const u = resolveDownloadLink(token)
+  if (!u || !existsSync(u.path)) {
+    res.writeHead(u ? 410 : 404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
+    res.end(u ? 'Файл переміщено або видалено з Mac mini.' : 'Посилання недійсне або його термін минув.')
+    return
+  }
+  serveFile(req, res, u, true, false)
 }
 
 // ---------- Маршрути API ----------
@@ -501,6 +572,29 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 
   if (path === '/api/chats' && method === 'GET') return send(res, 200, listChats().map(publicChat))
+
+  // ---------- Списки чатів ----------
+  if (path === '/api/lists' && method === 'GET') return send(res, 200, listLists())
+  if (path === '/api/lists' && method === 'POST') {
+    const { name } = await readJson<{ name?: string }>(req)
+    if (!name?.trim()) throw new HttpError(400, 'Дай списку назву')
+    const list = createList(newId(), name.trim().slice(0, 60))
+    emit({ type: 'lists', lists: listLists() })
+    return send(res, 200, list)
+  }
+  const lm = path.match(/^\/api\/lists\/([\w-]+)$/)
+  if (lm && method === 'PATCH') {
+    const b = await readJson<{ name?: string; color?: string }>(req)
+    updateList(lm[1]!, { ...(b.name?.trim() ? { name: b.name.trim().slice(0, 60) } : {}), ...(b.color && /^#[0-9a-f]{6}$/i.test(b.color) ? { color: b.color } : {}) })
+    emit({ type: 'lists', lists: listLists() })
+    return send(res, 200, listLists())
+  }
+  if (lm && method === 'DELETE') {
+    deleteList(lm[1]!)
+    emit({ type: 'lists', lists: listLists() })
+    for (const c of listChats()) emitChat(c.id)
+    return send(res, 200, { ok: true })
+  }
   if (path === '/api/messages' && method === 'POST') return send(res, 200, await sendMessage(await readJson(req)))
 
   let m = path.match(/^\/api\/chats\/([\w-]+)$/)
@@ -514,7 +608,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
       })
     }
     if (method === 'PATCH') {
-      const b = await readJson<{ title?: string; pinned?: boolean; model?: ModelChoice; mode?: string }>(req)
+      const b = await readJson<{ title?: string; pinned?: boolean; model?: ModelChoice; mode?: string; listId?: string | null }>(req)
       if (typeof b.title === 'string' && b.title.trim()) {
         const title = b.title.trim().slice(0, 120)
         updateChat(chat.id, { title, titleSource: 'user' })
@@ -522,6 +616,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
         else void renameSession(chat.sessionId, title)
       }
       if (typeof b.pinned === 'boolean') updateChat(chat.id, { pinned: b.pinned })
+      if (b.listId === null || (typeof b.listId === 'string' && listLists().some((l) => l.id === b.listId))) updateChat(chat.id, { listId: b.listId })
       if (b.model !== undefined) updateChat(chat.id, { model: b.model })
       if (isMode(b.mode)) {
         updateChat(chat.id, { mode: b.mode })
@@ -697,47 +792,24 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     return send(res, 200, a)
   }
 
+  m = path.match(/^\/api\/uploads\/([\w-]+)\/link$/)
+  if (m && method === 'POST') {
+    const u = getUpload(m[1]!)
+    if (!u) throw new HttpError(404, 'Файл не знайдено')
+    if (!existsSync(u.path)) throw new HttpError(410, 'Файл переміщено або видалено з Mac mini')
+    const token = randomBytes(24).toString('base64url')
+    const expiresAt = Date.now() + LINK_TTL
+    createDownloadLink(token, u.id, expiresAt)
+    return send(res, 200, { url: `/dl/${token}/${encodeURIComponent(u.name)}`, expiresAt })
+  }
+
   m = path.match(/^\/api\/uploads\/([\w-]+)$/)
   if (m && (method === 'GET' || method === 'HEAD')) {
     const u = getUpload(m[1]!)
-    if (!u || !existsSync(u.path)) throw new HttpError(404, 'Файл не знайдено')
-    const inline = /^(image|audio|video)\//.test(u.mime) || u.mime === 'application/pdf' || u.mime.startsWith('text/plain')
-    const download = url.searchParams.has('download') || !inline
-    const size = statSync(u.path).size
-    const headers: Record<string, string> = {
-      'Content-Type': u.mime === 'text/plain' ? 'text/plain; charset=utf-8' : u.mime,
-      'Accept-Ranges': 'bytes',
-      'Cache-Control': 'private, max-age=31536000, immutable',
-      'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(u.name)}`,
-      'X-Content-Type-Options': 'nosniff',
-    }
-    // Завантажені й згенеровані файли не мають права виконувати скрипти на нашому домені (SVG тощо).
-    // PDF лишаємо без sandbox, інакше браузер не відкриє свій переглядач.
-    if (u.mime !== 'application/pdf') {
-      headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox"
-    }
-    // Safari програє аудіо й відео лише з підтримкою Range.
-    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''))
-    if (range && (range[1] || range[2])) {
-      let start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]))
-      let end = range[1] && range[2] ? Number(range[2]) : size - 1
-      end = Math.min(end, size - 1)
-      if (start > end || start >= size) {
-        res.writeHead(416, { 'Content-Range': `bytes */${size}` })
-        res.end()
-        return
-      }
-      start = Math.max(0, start)
-      res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': String(end - start + 1) })
-      createReadStream(u.path, { start, end }).pipe(res)
-      return
-    }
-    res.writeHead(200, { ...headers, 'Content-Length': String(size) })
-    if (req.method === 'HEAD') return void res.end()
-    createReadStream(u.path).pipe(res)
-    return
+    if (!u) throw new HttpError(404, 'Файл не знайдено')
+    if (!existsSync(u.path)) throw new HttpError(410, 'Файл переміщено або видалено з Mac mini')
+    return serveFile(req, res, u, url.searchParams.has('download'))
   }
-
   // ---------- Розклад (cron-задачі Hermes) ----------
   if (path.startsWith('/api/jobs')) {
     try {
@@ -798,6 +870,8 @@ if (DEV) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://x')
+  const dl = /^\/dl\/([\w-]{20,})(?:\/|$)/.exec(url.pathname)
+  if (dl && (req.method === 'GET' || req.method === 'HEAD')) return serveDownloadLink(req, res, dl[1]!)
   if (!url.pathname.startsWith('/api/')) return handler(req, res)
   try {
     await api(req, res, url)
