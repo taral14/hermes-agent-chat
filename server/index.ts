@@ -601,14 +601,14 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
 
   // ---------- База знань (Obsidian-сховище Hermes) ----------
   if (path.startsWith('/api/kb')) {
-    if (path === '/api/kb') return send(res, 200, { ...vaultInfo(), list: listNotes() })
+    if (path === '/api/kb') return send(res, 200, { ...(await vaultInfo()), list: await listNotes() })
     if (path === '/api/kb/note') {
-      const note = getNote(url.searchParams.get('path') ?? '')
+      const note = await getNote(url.searchParams.get('path') ?? '')
       if (!note) throw new HttpError(404, 'Нотатку не знайдено')
       return send(res, 200, note)
     }
-    if (path === '/api/kb/search') return send(res, 200, searchNotes(url.searchParams.get('q') ?? ''))
-    if (path === '/api/kb/graph') return send(res, 200, graph())
+    if (path === '/api/kb/search') return send(res, 200, await searchNotes(url.searchParams.get('q') ?? ''))
+    if (path === '/api/kb/graph') return send(res, 200, await graph())
     if (path === '/api/kb/resolve') return send(res, 200, { path: resolveLink(url.searchParams.get('target') ?? '') })
     if (path === '/api/kb/file') {
       const rel = url.searchParams.get('path') ?? ''
@@ -829,8 +829,12 @@ resumeActiveRuns()
 backfillMedia()
 sweepUploads()
 setInterval(() => sweepUploads(), 6 * 3600_000).unref()
-watchVault((paths) => emit({ type: 'kb', paths }))
-server.listen(PORT, '127.0.0.1', () => console.log(`chat: http://127.0.0.1:${PORT}${DEV ? ' (dev)' : ''}`))
+
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`chat: http://127.0.0.1:${PORT}${DEV ? ' (dev)' : ''}`)
+  // Сховище читаємо вже після старту: доступ до iCloud Drive не має затримувати сервер.
+  void watchVault((paths) => emit({ type: 'kb', paths }))
+})
 
 function shutdown() {
   stopAll()

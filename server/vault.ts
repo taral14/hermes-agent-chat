@@ -1,6 +1,7 @@
 // База знань: Obsidian-сховище, куди пише Hermes. Читаємо нотатки, розв'язуємо [[вікі-посилання]],
 // рахуємо зворотні посилання і стежимо за змінами, щоб показувати нове наживо.
-import { existsSync, readFileSync, readdirSync, statSync, watch } from 'node:fs'
+import { existsSync, readFileSync, watch } from 'node:fs'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
@@ -67,8 +68,7 @@ function tagsOf(fm: Record<string, unknown> | null, body: string): string[] {
   return [...out]
 }
 
-function load(rel: string, full: string, st: { mtimeMs: number; size: number }): Note {
-  const text = readFileSync(full, 'utf8')
+function parse(rel: string, text: string, st: { mtimeMs: number; size: number }): Note {
   const { fm, body } = splitFrontmatter(text)
   const links: string[] = []
   for (const m of body.matchAll(WIKILINK)) links.push(m[2]!.trim())
@@ -86,29 +86,39 @@ function load(rel: string, full: string, st: { mtimeMs: number; size: number }):
   }
 }
 
-/** Пересканувати сховище. Перечитуються лише змінені файли, тож це дешево. */
-function scan() {
-  if (!existsSync(VAULT)) return
-  const seen = new Set<string>()
-  const seenAssets = new Set<string>()
-  const walk = (dir: string) => {
-    let entries
-    try {
-      entries = readdirSync(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const e of entries) {
-      if (e.name.startsWith('.') && SKIP.has(e.name)) continue
-      if (SKIP.has(e.name)) continue
-      const full = join(dir, e.name)
-      if (e.isDirectory()) walk(full)
-      else if (e.isFile()) {
+let scanning: Promise<void> | null = null
+/** Чи вдалося хоч раз прочитати сховище (macOS може не пускати процес у iCloud Drive). */
+let readable = false
+
+/**
+ * Пересканувати сховище. Усе асинхронно: якщо macOS тримає доступ до iCloud Drive, сервер не зависає,
+ * а лише база знань лишається порожньою. Перечитуються тільки змінені файли.
+ */
+function scan(): Promise<void> {
+  if (scanning) return scanning
+  scanning = (async () => {
+    const seen = new Set<string>()
+    const seenAssets = new Set<string>()
+    const walk = async (dir: string) => {
+      let entries
+      try {
+        entries = await readdir(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const e of entries) {
+        if (SKIP.has(e.name)) continue
+        const full = join(dir, e.name)
+        if (e.isDirectory()) {
+          await walk(full)
+          continue
+        }
+        if (!e.isFile()) continue
         const rel = relative(VAULT, full).split(sep).join('/')
         const ext = extname(e.name).toLowerCase()
         let st
         try {
-          st = statSync(full)
+          st = await stat(full)
         } catch {
           continue
         }
@@ -117,7 +127,7 @@ function scan() {
           const prev = notes.get(rel)
           if (!prev || prev.mtime !== st.mtimeMs || prev.size !== st.size) {
             try {
-              notes.set(rel, load(rel, full, st))
+              notes.set(rel, parse(rel, await readFile(full, 'utf8'), st))
             } catch {
               /* файл ще не докачався з iCloud */
             }
@@ -128,15 +138,21 @@ function scan() {
         }
       }
     }
-  }
-  walk(VAULT)
-  for (const k of notes.keys()) if (!seen.has(k)) notes.delete(k)
-  for (const k of assets.keys()) if (!seenAssets.has(k)) assets.delete(k)
-  lastScan = Date.now()
+    await walk(VAULT)
+    for (const k of notes.keys()) if (!seen.has(k)) notes.delete(k)
+    for (const k of assets.keys()) if (!seenAssets.has(k)) assets.delete(k)
+    readable = readable || seen.size > 0
+    lastScan = Date.now()
+  })().finally(() => {
+    scanning = null
+  })
+  return scanning
 }
 
-function fresh() {
-  if (Date.now() - lastScan > 5000) scan()
+/** Свіжий індекс: чекаємо на сканування не довше 3 с, щоб запит ніколи не зависав. */
+async function fresh() {
+  if (Date.now() - lastScan < 5000 && !scanning) return
+  await Promise.race([scan(), new Promise((r) => setTimeout(r, 3000))])
 }
 
 // ---------- Посилання ----------
@@ -185,18 +201,18 @@ function backlinks(path: string) {
 
 const meta = ({ path, title, folder, mtime, size, tags }: Note): NoteMeta => ({ path, title, folder, mtime, size, tags })
 
-export function vaultInfo() {
-  fresh()
-  return { available: existsSync(VAULT), name: basename(VAULT), notes: notes.size }
+export async function vaultInfo() {
+  await fresh()
+  return { available: readable, name: basename(VAULT), notes: notes.size }
 }
 
-export function listNotes(): NoteMeta[] {
-  fresh()
+export async function listNotes(): Promise<NoteMeta[]> {
+  await fresh()
   return [...notes.values()].map(meta).sort((a, b) => a.path.localeCompare(b.path, 'uk'))
 }
 
-export function getNote(path: string) {
-  fresh()
+export async function getNote(path: string) {
+  await fresh()
   const n = notes.get(path)
   if (!n) return null
   const resolved: Record<string, string | null> = {}
@@ -204,8 +220,8 @@ export function getNote(path: string) {
   return { ...meta(n), body: n.body, frontmatter: n.frontmatter, links: resolved, backlinks: backlinks(path) }
 }
 
-export function searchNotes(q: string) {
-  fresh()
+export async function searchNotes(q: string) {
+  await fresh()
   const query = q.trim().toLowerCase()
   if (!query) return []
   const words = query.split(/\s+/).filter(Boolean)
@@ -226,8 +242,8 @@ export function searchNotes(q: string) {
   return results.sort((a, b) => b.score - a.score || b.mtime - a.mtime).slice(0, 50)
 }
 
-export function graph() {
-  fresh()
+export async function graph() {
+  await fresh()
   const nodes = [...notes.values()].map((n) => ({ id: n.path, title: n.title, folder: n.folder.split('/')[0] ?? '' }))
   const edges: [string, string][] = []
   const seen = new Set<string>()
@@ -253,9 +269,13 @@ export function vaultFile(rel: string): string | null {
 }
 
 /** Стежимо за сховищем: Hermes щось записав — оновлюємо індекс і кажемо вкладкам. */
-export function watchVault(onChange: (paths: string[]) => void) {
-  if (!existsSync(VAULT)) return
-  scan()
+export async function watchVault(onChange: (paths: string[]) => void) {
+  await scan()
+  if (!readable) {
+    console.warn(`[vault] сховище недоступне або порожнє: ${VAULT}. Повторю за хвилину.`)
+    setTimeout(() => void watchVault(onChange), 60_000).unref()
+    return
+  }
   let pending = new Set<string>()
   let timer: NodeJS.Timeout | null = null
   try {
@@ -270,8 +290,9 @@ export function watchVault(onChange: (paths: string[]) => void) {
         const changed = [...pending].filter((p) => p.endsWith('.md'))
         pending = new Set()
         lastScan = 0
-        scan()
-        if (changed.length) onChange(changed)
+        void scan().then(() => {
+          if (changed.length) onChange(changed)
+        })
       }, 700)
     })
   } catch (err) {
