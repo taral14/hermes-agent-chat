@@ -97,6 +97,8 @@ export type Chat = {
 
 export type ModelOptions = {
   current: { provider: string; model: string }
+  /** Зусилля за замовчуванням у налаштуваннях Hermes (agent.reasoning_effort). */
+  defaultEffort: string
   providers: { slug: string; name: string; models: string[]; reasoning: Record<string, boolean> }[]
 }
 

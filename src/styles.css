@@ -3852,3 +3852,326 @@ button.act-line:hover:not(:disabled) {
     font-size: 17px;
   }
 }
+
+/* ---------- Модель і зусилля (як у Claude) ---------- */
+
+.topbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 0 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: min(52vw, 520px);
+}
+
+.mp {
+  position: relative;
+  margin-right: 6px;
+}
+
+.mp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  max-width: 46vw;
+}
+
+.mp-btn:hover,
+.mp-btn.is-open {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.mp-btn-model {
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mp-btn-effort {
+  font-size: 12px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bubble);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.mp-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: 330px;
+  max-height: min(70vh, 560px);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 18px;
+  background: var(--menu);
+  box-shadow: var(--menu-shadow);
+  z-index: 40;
+  overflow: hidden;
+}
+
+.mp-menu.is-sheet {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  max-height: 86%;
+  border-radius: 28px 28px 0 0;
+  padding: 8px 10px max(18px, env(safe-area-inset-bottom));
+  animation: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mp-label {
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.mp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.mp-row:hover {
+  background: var(--hover);
+}
+
+.mp-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mp-row-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.mp-row-sub {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.mp-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--bubble);
+  color: var(--text-2);
+}
+
+.mp-more {
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 12px 12px;
+  margin-top: 4px;
+}
+
+.mp-effort {
+  margin-top: 6px;
+  padding: 6px 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.mp-effort-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mp-effort-head .mp-label {
+  padding-left: 0;
+}
+
+.mp-auto {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.mp-auto.is-on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.mp-track {
+  position: relative;
+  height: 34px;
+  margin: 8px 12px 4px;
+}
+
+.mp-track-line,
+.mp-track-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 999px;
+}
+
+.mp-track-line {
+  right: 0;
+  background: var(--border-strong);
+}
+
+.mp-track-fill {
+  background: #d97757;
+  transition: width 0.2s;
+}
+
+.mp-dot {
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 999px;
+  background: var(--menu);
+  border: 2px solid var(--border-strong);
+  transition: transform 0.12s, background 0.15s, border-color 0.15s;
+}
+
+.mp-dot.is-filled {
+  background: #d97757;
+  border-color: #d97757;
+}
+
+.mp-dot.is-current {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.22);
+}
+
+.mp-dot.is-auto.is-filled {
+  background: #d9775799;
+  border-color: #d9775799;
+}
+
+.mp-effort-label {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.mp-effort-label b {
+  color: var(--text);
+}
+
+.mp-more-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 2px 6px;
+}
+
+.mp-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 6px 0 12px;
+  border-radius: 12px;
+  background: var(--bubble);
+  color: var(--text-3);
+}
+
+.mp-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.mp-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .mp-btn {
+    font-size: 14.5px;
+    height: 38px;
+  }
+  .mp-row-title {
+    font-size: 17px;
+  }
+  .mp-row {
+    min-height: 52px;
+  }
+  .mp-search input {
+    font-size: 17px;
+  }
+  .topbar-title {
+    font-size: 17px;
+    max-width: 58vw;
+  }
+}
+
+/* Поле вводу на телефоні: режим — лише іконкою, модель стискається, кнопка відправки завжди видима. */
+.mode-chip,
+.mp-btn {
+  white-space: nowrap;
+}
+
+.composer-bar .mp {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.composer-bar .send-btn,
+.composer-bar > .icon-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .mode-chip {
+    padding: 0 8px 0 10px;
+    gap: 4px;
+  }
+  .mode-chip-label {
+    display: none;
+  }
+  .mp-btn {
+    max-width: none;
+    min-width: 0;
+  }
+  .mp-btn-effort {
+    font-size: 11.5px;
+  }
+}
+
+@media (max-width: 360px) {
+  .mp-btn-effort {
+    display: none;
+  }
+}

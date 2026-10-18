@@ -20,6 +20,7 @@ import {
   updateChat,
 } from './db.ts'
 import { type GatewayEvent, GatewayError, type ServerRequest, gateway } from './gateway.ts'
+import { defaultEffort } from './hermes.ts'
 import { CHAT_INSTRUCTIONS } from './media.ts'
 import { promptRaised } from './push.ts'
 import {
@@ -169,8 +170,28 @@ function stageImages(attachments: Attachment[]) {
   return staged
 }
 
+/** Зусилля, яке зараз стоїть у кожній сесії (щоб не міняти його без потреби). */
+const appliedEffort = new Map<string, string>()
+
+/** Зусилля чату → політика сесії Hermes (session.mutate reasoning). «Авто» повертає значення з налаштувань. */
+async function applyEffort(sessionId: string, effort: string | undefined) {
+  const want = effort || defaultEffort()
+  if (appliedEffort.get(sessionId) === want) return
+  if (!appliedEffort.has(sessionId) && !effort) {
+    appliedEffort.set(sessionId, want) // нова сесія й так створена з налаштуваннями Hermes
+    return
+  }
+  try {
+    await mutate(sessionId, 'reasoning', { effort: want })
+    appliedEffort.set(sessionId, want)
+  } catch (err) {
+    console.warn(`[native] не вдалося задати зусилля ${want}: ${(err as Error).message}`)
+  }
+}
+
 async function submit(chat: ChatRow, assistant: MessageRow, user: MessageRow, text: string) {
   const sessionId = await ensureSession(chat)
+  await applyEffort(sessionId, (chat.model as ModelChoice)?.effort)
   const images = stageImages(user.attachments)
   awaiting.set(chat.id, assistant.id)
   const model = chat.model as ModelChoice
@@ -180,7 +201,7 @@ async function submit(chat: ChatRow, assistant: MessageRow, user: MessageRow, te
     text,
     api_text: apiText(text, user.attachments),
     ...(images.length ? { attachments: images } : {}),
-    ...(model ? { model_override: { model: model.model, provider: model.provider } } : {}),
+    ...(model?.model ? { model_override: { model: model.model, provider: model.provider } } : {}),
   })
   bind(assistant, user, receipt.admission_id)
 }

@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import type { ModelOptions } from '../src/shared.ts'
 
 const BASE = process.env.HERMES_URL ?? 'http://127.0.0.1:8642'
@@ -74,8 +75,10 @@ export async function startRun(req: RunRequest): Promise<string> {
   }
   if (req.instructions) body.instructions = req.instructions
   if (req.model) {
-    body.provider = req.model.provider
-    body.model = req.model.model
+    if (req.model.model) {
+      body.provider = req.model.provider
+      body.model = req.model.model
+    }
     if (req.model.effort) body.model_options = { reasoning_effort: req.model.effort }
   }
   const r = await call<{ run_id: string }>('POST', '/v1/runs', body, { 'Idempotency-Key': req.idempotencyKey })
@@ -143,6 +146,17 @@ export async function lastAssistantText(sessionId: string): Promise<string | nul
   return null
 }
 
+/** agent.reasoning_effort з ~/.hermes/config.yaml (за замовчуванням medium). */
+export function defaultEffort(): string {
+  try {
+    const cfg = parseYaml(readFileSync(join(homedir(), '.hermes', 'config.yaml'), 'utf8')) as { agent?: { reasoning_effort?: unknown } }
+    const v = String(cfg?.agent?.reasoning_effort ?? '').trim()
+    return v || 'medium'
+  } catch {
+    return 'medium'
+  }
+}
+
 let modelCache: { at: number; value: ModelOptions } | null = null
 
 export async function modelOptions(): Promise<ModelOptions> {
@@ -160,6 +174,7 @@ export async function modelOptions(): Promise<ModelOptions> {
   }>('GET', '/api/model/options')
   const value: ModelOptions = {
     current: { provider: r.provider, model: r.model },
+    defaultEffort: defaultEffort(),
     providers: r.providers
       .filter((p) => p.authenticated && p.models?.length)
       .map((p) => ({

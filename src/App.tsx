@@ -348,6 +348,7 @@ export default function App() {
       onStop={stop}
       onSteer={steer}
       commands={native ? commands : null}
+      modelSlot={<ModelPicker value={current ? current.model : newModel} options={models} onChange={setModel} narrow={narrow} />}
       mode={native ? (current?.mode ?? newMode) : undefined}
       onMode={(m) => {
         if (!current) return setNewMode(m)
@@ -411,7 +412,7 @@ export default function App() {
               </button>
             </>
           )}
-          <ModelPicker value={current ? current.model : newModel} options={models} onChange={setModel} />
+          <span className="topbar-title">{current?.title || 'Hermes'}</span>
         </div>
         <button type="button" className="icon-btn only-narrow m-menu-btn" aria-label="Новий чат" onClick={newChat}>
           <SquarePen size={19} />

@@ -1,5 +1,5 @@
 import { ArrowUp, Check, ChevronDown, FileText, Hand, ListChecks, Loader2, MessageSquarePlus, Paperclip, Sparkles, Square, SquareSlash, X, Zap, type LucideIcon } from 'lucide-react'
-import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { type CommandInfo, api, uploadUrl } from '../api.ts'
 import type { Attachment, ChatMode } from '../shared.ts'
 
@@ -19,6 +19,8 @@ type Props = {
   /** Режим чату (як у Claude Code); без нього перемикача немає (старі чати). */
   mode?: ChatMode
   onMode?: (m: ChatMode) => void
+  /** Вибір моделі й зусилля (стоїть поруч із кнопкою відправки, як у Claude). */
+  modelSlot?: ReactNode
 }
 
 export const MODES: { mode: ChatMode; label: string; hint: string; Icon: LucideIcon }[] = [
@@ -41,7 +43,7 @@ function ModePicker({ mode, onMode }: { mode: ChatMode; onMode: (m: ChatMode) =>
     <div className="mode-picker" ref={box}>
       <button type="button" className={`mode-chip is-${mode}`} onClick={() => setOpen((o) => !o)} title="Режим (Shift+Tab)">
         <cur.Icon size={15} />
-        <span>{cur.label}</span>
+        <span className="mode-chip-label">{cur.label}</span>
         <ChevronDown size={14} />
       </button>
       {open && (
@@ -77,7 +79,7 @@ const drafts = new Map<string, string>()
 /** Підготувати текст у полі вводу чату (напр. «Обговорити з Hermes» з бази знань). */
 export const setDraft = (key: string, text: string) => drafts.set(key, text)
 
-export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, commands, mode, onMode }: Props) {
+export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, commands, mode, onMode, modelSlot }: Props) {
   const [text, setText] = useState(() => drafts.get(draftKey) ?? '')
   const [files, setFiles] = useState<Pending[]>([])
   const [busy, setBusy] = useState(false)
@@ -275,6 +277,7 @@ export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, comm
           />
           {mode && onMode && <ModePicker mode={mode} onMode={onMode} />}
           <div className="composer-spacer" />
+          {modelSlot}
           {running && text.trim() ? (
             <button type="button" className="send-btn" title="Додати до поточної задачі" aria-label="Додати до задачі" disabled={!canSend} onClick={() => void submit()}>
               <MessageSquarePlus size={18} />
