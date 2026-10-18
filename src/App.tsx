@@ -1,4 +1,4 @@
-import { ArrowDown, Menu, PanelLeftOpen, SquarePen } from 'lucide-react'
+import { ArrowDown, Menu, PanelLeftOpen, Share, SquarePen } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type CommandInfo, api } from './api.ts'
 import { Composer, type ComposerHandle, setDraft } from './components/Composer.tsx'
@@ -8,6 +8,7 @@ import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { Login } from './components/Login.tsx'
 import { Notifications } from './components/Notifications.tsx'
 import { Security } from './components/Security.tsx'
+import { ShareSheet } from './components/ShareSheet.tsx'
 import { reportPresence } from './push.ts'
 import { ActionsContext, type MessageActions, MessageView } from './components/MessageView.tsx'
 import { GoalBar } from './components/GoalBar.tsx'
@@ -87,6 +88,7 @@ export default function App() {
   const [dragging, setDragging] = useState(false)
   const [notif, setNotif] = useState(false)
   const [security, setSecurity] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [atBottom, setAtBottom] = useState(true)
   const scroller = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
@@ -422,9 +424,17 @@ export default function App() {
           )}
           <span className="topbar-title">{current?.title || 'Hermes'}</span>
         </div>
-        <button type="button" className="icon-btn only-narrow m-menu-btn" aria-label="Новий чат" onClick={newChat}>
-          <SquarePen size={19} />
-        </button>
+        <div className="topbar-right">
+          {current && (list?.length ?? 0) > 0 && (
+            <button type="button" className="topbar-share" aria-label="Поділитися" title="Поділитися" onClick={() => setSharing(true)}>
+              <Share size={18} />
+              <span className="only-wide">Поділитися</span>
+            </button>
+          )}
+          <button type="button" className="icon-btn only-narrow m-menu-btn" aria-label="Новий чат" onClick={newChat}>
+            <SquarePen size={19} />
+          </button>
+        </div>
       </header>
   )
 
@@ -605,6 +615,7 @@ export default function App() {
         {error && <div className="toast">{error}</div>}
         {notif && <Notifications onClose={() => setNotif(false)} />}
         {security && <Security onClose={() => setSecurity(false)} />}
+        {sharing && current && <ShareSheet chat={current} onClose={() => setSharing(false)} />}
       </main>
     </div>
   )

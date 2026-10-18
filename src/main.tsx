@@ -1,6 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+import { setPublicFiles } from './api.ts'
+import { ShareView } from './components/ShareView.tsx'
 import { registerSW } from './push.ts'
 import './styles.css'
 
@@ -17,10 +19,11 @@ vv?.addEventListener('scroll', syncViewport)
 window.addEventListener('resize', syncViewport)
 syncViewport()
 
-void registerSW()
+// /s/<токен> — спільний чат лише для перегляду: без входу, пушів і сервіс-воркера.
+const shareToken = /^\/s\/([\w-]{20,})\/?$/.exec(location.pathname)?.[1]
+if (shareToken) setPublicFiles(shareToken)
+else void registerSW()
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  <StrictMode>{shareToken ? <ShareView token={shareToken} /> : <App />}</StrictMode>,
 )

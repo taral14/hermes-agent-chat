@@ -28,10 +28,11 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { createContext, memo, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { api, uploadUrl } from '../api.ts'
+import { api, isPublicView, uploadUrl } from '../api.ts'
 import type { Attachment, Message, Part } from '../shared.ts'
 import { fileKind, formatSize } from '../fileKind.ts'
 import { AudioPlayer } from './AudioPlayer.tsx'
+import { LinkPreviews, LinkText } from './Links.tsx'
 import { CopyButton, Markdown } from './Markdown.tsx'
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
@@ -83,7 +84,53 @@ function useNow(active: boolean) {
 
 // ---------- Користувач ----------
 
+/** Файл на сторінці спільного доступу: просте завантаження, а файли лише з Mac mini — тільки назва. */
+function PublicFileCard({ a }: { a: Attachment }) {
+  const kind = fileKind(a.name, a.mime)
+  const icon = (
+    <span className="att-file-icon" style={{ background: kind.color }}>
+      <kind.Icon size={19} />
+      {kind.ext && kind.ext.length <= 4 && <span className="att-ext">{kind.ext}</span>}
+    </span>
+  )
+  const text = (
+    <span className="att-file-text">
+      <span className="att-file-name">{a.name}</span>
+      <span className="att-file-meta">
+        {kind.label} · {formatSize(a.size)}
+        {a.ref && <span className="att-ref"> · доступний лише власнику</span>}
+      </span>
+    </span>
+  )
+  if (a.ref || !a.id) {
+    return (
+      <div className="att-file">
+        <span className="att-file-open">
+          {icon}
+          {text}
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className="att-file">
+      <a href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file-open" title={a.name}>
+        {icon}
+        {text}
+      </a>
+      <a href={`${uploadUrl(a.id)}?download`} download={a.name} className="icon-btn" title="Завантажити" aria-label="Завантажити">
+        <Download size={16} />
+      </a>
+    </div>
+  )
+}
+
 function FileCard({ a }: { a: Attachment }) {
+  if (isPublicView()) return <PublicFileCard a={a} />
+  return <PrivateFileCard a={a} />
+}
+
+function PrivateFileCard({ a }: { a: Attachment }) {
   const kind = fileKind(a.name, a.mime)
   const [busy, setBusy] = useState<'' | 'dl' | 'copy'>('')
   const [note, setNote] = useState('')
@@ -159,7 +206,9 @@ function Attachments({ items, side }: { items: Attachment[]; side: 'user' | 'ass
   return (
     <div className={`msg-attachments is-${side}`}>
       {items.map((a) =>
-        a.mime.startsWith('image/') ? (
+        !a.id ? (
+          <FileCard key={a.name} a={a} />
+        ) : a.mime.startsWith('image/') ? (
           <a key={a.id} href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-image">
             <img src={uploadUrl(a.id)} alt={a.name} loading="lazy" />
           </a>
@@ -267,7 +316,10 @@ function UserMessage({ m }: { m: Message }) {
   return (
     <div className="msg msg-user">
       <Attachments items={m.attachments} side="user" />
-      {m.text && <div className={`bubble ${m.text.startsWith('/') ? 'is-command' : ''}`}>{m.text}</div>}
+      {m.text && (
+        <div className={`bubble ${m.text.startsWith('/') ? 'is-command' : ''}`}>{m.text.startsWith('/') ? m.text : <LinkText text={m.text} />}</div>
+      )}
+      {m.text && !m.text.startsWith('/') && <LinkPreviews text={m.text} />}
       {m.text && (
         <div className="msg-actions msg-actions-user">
           {canEdit && (

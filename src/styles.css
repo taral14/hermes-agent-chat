@@ -4437,3 +4437,495 @@ button.act-line:hover:not(:disabled) {
 .sec-revoke:disabled {
   opacity: 0.6;
 }
+
+/* ---------- Посилання в повідомленнях ---------- */
+
+.bubble-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.bubble-link:hover {
+  text-decoration-color: currentColor;
+}
+
+.link-previews {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+  width: min(100%, 380px);
+}
+
+.link-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg);
+  color: var(--text);
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.link-card:hover {
+  background: var(--hover);
+}
+
+.link-card-image {
+  display: block;
+  aspect-ratio: 1.91 / 1;
+  max-height: 200px;
+  background: var(--bubble);
+  overflow: hidden;
+}
+
+.link-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.link-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 14px 12px;
+  min-width: 0;
+}
+
+.link-card-site {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  min-width: 0;
+}
+
+.link-card-site img {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.link-card-site span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.link-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.link-card-desc {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.link-card.is-compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 10px 10px;
+}
+
+.link-card.is-compact .link-card-body {
+  padding: 0;
+}
+
+.link-card.is-compact .link-card-title {
+  font-size: 14px;
+  -webkit-line-clamp: 1;
+}
+
+.link-card-globe {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--bubble);
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.link-card-url {
+  font-size: 12.5px;
+  color: var(--text-3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.link-card.is-loading .link-card-globe {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* YouTube */
+
+.yt-card {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg);
+}
+
+.yt-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.yt-card.is-short {
+  width: min(100%, 220px);
+}
+
+.yt-card.is-short .yt-frame {
+  aspect-ratio: 9 / 16;
+}
+
+.yt-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.yt-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  cursor: pointer;
+}
+
+.yt-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.yt-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(15, 15, 15, 0.78);
+  color: #fff;
+  transform: translate(-50%, -50%);
+  transition: background 0.15s, transform 0.15s;
+}
+
+.yt-thumb:hover .yt-play {
+  background: #ff0033;
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.yt-start {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.yt-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.yt-meta:hover {
+  background: var(--hover);
+}
+
+.yt-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  min-height: 1.3em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.yt-channel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.yt-logo {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 13px;
+  border-radius: 4px;
+  background: #ff0033;
+  color: #fff;
+}
+
+/* ---------- Поділитися ---------- */
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.topbar-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.topbar-share:hover {
+  background: var(--hover);
+}
+
+.is-narrow .topbar-share {
+  width: 40px;
+  padding: 0;
+  justify-content: center;
+}
+
+.share-create {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 50px;
+  border-radius: 14px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.share-create:disabled {
+  opacity: 0.6;
+}
+
+.share-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+}
+
+.share-link-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14.5px;
+  color: var(--text-2);
+}
+
+.share-copy {
+  flex-shrink: 0;
+}
+
+.share-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.share-actions .btn {
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+}
+
+.share-status {
+  margin: 14px 4px 0;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.share-newer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px 12px 12px 14px;
+  border-radius: 14px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.share-newer .btn {
+  flex-shrink: 0;
+}
+
+.share-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.share-confirm span {
+  flex: 1;
+}
+
+.share-sheet .sec-revoke {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Сторінка спільного чату */
+
+.share-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+}
+
+.share-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.share-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.share-brand img {
+  width: 24px;
+  height: 24px;
+}
+
+.share-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--bubble);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.share-head {
+  padding: 28px 0 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.share-head h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+.share-meta {
+  font-size: 14px;
+  color: var(--text-3);
+}
+
+.share-foot {
+  margin: 28px 0 40px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.share-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.share-empty h1 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--text);
+}
+
+.share-thread .msg-user:hover .msg-actions-user {
+  opacity: 1;
+}

@@ -1,0 +1,63 @@
+// Пошук посилань у тексті й розпізнавання YouTube. Без імпортів: файл читає і сервер (Node), і клієнт (Vite).
+
+const URL_RE = /\bhttps?:\/\/[^\s<>"'`]+/gi
+
+/** Прибрати розділові знаки, що прилипли в кінці («див. https://x.com/a.»), але не дужку з Вікіпедії. */
+export function trimUrl(raw: string): string {
+  let u = raw.replace(/[.,;:!?…»"'\])]+$/, '')
+  const rest = raw.slice(u.length)
+  if (rest.startsWith(')') && (u.match(/\(/g)?.length ?? 0) > (u.match(/\)/g)?.length ?? 0)) u += ')'
+  return u
+}
+
+/** Шматки тексту: звичайний текст і посилання, по черзі. */
+export function splitLinks(text: string): { text: string; url?: string }[] {
+  const out: { text: string; url?: string }[] = []
+  let last = 0
+  for (const m of text.matchAll(URL_RE)) {
+    const url = trimUrl(m[0])
+    const at = m.index ?? 0
+    if (at > last) out.push({ text: text.slice(last, at) })
+    out.push({ text: url, url })
+    last = at + url.length
+  }
+  if (last < text.length) out.push({ text: text.slice(last) })
+  return out
+}
+
+/** Унікальні посилання з тексту, не більше max. */
+export function findUrls(text: string, max = 3): string[] {
+  const out: string[] = []
+  for (const p of splitLinks(text)) {
+    if (p.url && p.url.length <= 2000 && !out.includes(p.url)) out.push(p.url)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+function parseTime(t: string): number {
+  if (/^\d+$/.test(t)) return Number(t)
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(t)
+  return m ? Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) : 0
+}
+
+/** youtube.com/watch?v=…, youtu.be/…, /shorts/…, /live/… → id відео, час старту і чи це Shorts. */
+export function youtubeId(url: string): { id: string; start?: number; short: boolean } | null {
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return null
+  }
+  const host = u.hostname.toLowerCase().replace(/^(www\.|m\.|music\.)/, '')
+  let id: string | null = null
+  if (host === 'youtu.be') id = u.pathname.slice(1).split('/')[0] ?? null
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    if (u.pathname === '/watch') id = u.searchParams.get('v')
+    else id = /^\/(?:shorts|live|embed|v)\/([\w-]{11})/.exec(u.pathname)?.[1] ?? null
+  }
+  if (!id || !/^[\w-]{11}$/.test(id)) return null
+  const t = u.searchParams.get('t') ?? u.searchParams.get('start')
+  const start = t ? parseTime(t) : 0
+  return { id, ...(start ? { start } : {}), short: u.pathname.startsWith('/shorts/') }
+}

@@ -1,4 +1,4 @@
-import type { Attachment, Chat, ChatList, ChatMode, Job, JobRun, Message, ModelChoice, ModelOptions } from './shared.ts'
+import type { Attachment, Chat, ChatList, ChatMode, Job, JobRun, LinkPreview, Message, ModelChoice, ModelOptions, ShareInfo, SharedChat } from './shared.ts'
 
 export class ApiError extends Error {
   status: number
@@ -58,6 +58,15 @@ export const api = {
   jobAction: (id: string, action: 'pause' | 'resume' | 'run') => req<Job>('POST', `/api/jobs/${id}/${action}`),
   jobRuns: (id: string) => req<JobRun[]>('GET', `/api/jobs/${id}/runs`),
   runOutput: (sessionId: string) => req<{ output: string }>('GET', `/api/jobs/runs/${sessionId}`),
+  share: (chatId: string) => req<{ share: ShareInfo | null }>('GET', `/api/chats/${chatId}/share`),
+  createShare: (chatId: string) => req<{ share: ShareInfo }>('POST', `/api/chats/${chatId}/share`),
+  deleteShare: (chatId: string) => req<{ share: null }>('DELETE', `/api/chats/${chatId}/share`),
+  publicShare: async (token: string): Promise<SharedChat> => {
+    const res = await fetch(`/api/public/share/${token}`)
+    const data = (await res.json().catch(() => ({}))) as SharedChat & { error?: string }
+    if (!res.ok) throw new ApiError(res.status, data.error ?? `Помилка ${res.status}`)
+    return data
+  },
   async upload(file: File): Promise<Attachment> {
     const res = await fetch('/api/uploads', {
       method: 'POST',
@@ -75,4 +84,21 @@ export type CommandInfo = { name: string; description: string; hint?: string; sk
 
 export type JobInput = { name: string; prompt: string; schedule: string; deliver: string; repeat?: number | null }
 
-export const uploadUrl = (id: string) => `/api/uploads/${id}`
+let filesBase = '/api/uploads'
+/** Сторінка спільного чату: файли беруться через токен посилання, без входу. */
+export function setPublicFiles(token: string) {
+  filesBase = `/api/public/share/${token}/file`
+}
+export const isPublicView = () => filesBase !== '/api/uploads'
+export const uploadUrl = (id: string) => `${filesBase}/${id}`
+
+const previews = new Map<string, Promise<LinkPreview>>()
+/** Картка посилання (кеш на сторінку: однакові посилання питаємо раз). */
+export function unfurl(url: string): Promise<LinkPreview> {
+  let p = previews.get(url)
+  if (!p) {
+    p = req<LinkPreview>('GET', `/api/unfurl?url=${encodeURIComponent(url)}`).catch(() => ({ url, kind: 'link' as const, failed: true }))
+    previews.set(url, p)
+  }
+  return p
+}

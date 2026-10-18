@@ -160,6 +160,31 @@ export type ServerEvent =
   /** Hermes змінив нотатки в базі знань. */
   | { type: 'kb'; paths: string[] }
 
+// ---------- Посилання і спільний доступ ----------
+
+/** Картка посилання: заголовок, опис і картинка зі сторінки (Open Graph), для YouTube — з oEmbed. */
+export type LinkPreview = {
+  url: string
+  kind: 'link' | 'youtube'
+  title?: string
+  description?: string
+  image?: string
+  siteName?: string
+  icon?: string
+  videoId?: string
+  channel?: string
+  /** Сторінку не вдалося прочитати: показуємо просту картку з доменом. */
+  failed?: boolean
+}
+
+export type SharedMessage = Pick<Message, 'id' | 'role' | 'text' | 'attachments' | 'createdAt' | 'model'>
+
+/** Чат, яким поділились: знімок лише для перегляду. */
+export type SharedChat = { title: string; sharedAt: number; messages: SharedMessage[]; previews: Record<string, LinkPreview> }
+
+/** Стан посилання на чат для власника. */
+export type ShareInfo = { token: string; url: string; upto: number; createdAt: number; updatedAt: number; count: number; newer: number }
+
 // ---------- База знань ----------
 
 export type KbNote = { path: string; title: string; folder: string; mtime: number; size: number; tags: string[] }

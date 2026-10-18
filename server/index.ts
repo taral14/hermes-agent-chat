@@ -4,10 +4,17 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import type { Attachment, ChatMode, ModelChoice, ServerEvent } from '../src/shared.ts'
+import type { Attachment, ChatMode, LinkPreview, ModelChoice, ServerEvent, ShareInfo, SharedChat } from '../src/shared.ts'
+import { findUrls } from '../src/links.ts'
+import { cachedPreview, unfurl } from './unfurl.ts'
 import {
   DATA_DIR,
   DEFAULT_PUSH,
+  type ShareRow,
+  deleteShare,
+  getShare,
+  getShareByChat,
+  upsertShare,
   type UploadRow,
   createDownloadLink,
   resolveDownloadLink,
@@ -252,7 +259,7 @@ const PAGE_HEADERS: Record<string, string> = {
     "connect-src 'self'",
     "worker-src 'self'",
     "manifest-src 'self'",
-    "frame-src 'self'",
+    "frame-src 'self' https://www.youtube-nocookie.com",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",
@@ -493,6 +500,74 @@ function serveDownloadLink(req: IncomingMessage, res: ServerResponse, token: str
   serveFile(req, res, u, true, false)
 }
 
+// ---------- Спільний доступ (лише перегляд) ----------
+
+const SHARE_ACTIVE = new Set(['queued', 'running', 'stopping'])
+const PUBLIC_ORIGIN = `https://${process.env.PUBLIC_HOST ?? 'chat.example.com'}`
+
+/** Повідомлення, що потрапляють у посилання: до моменту `upto`, завершені й не порожні. */
+function sharedMessages(share: ShareRow) {
+  return listMessages(share.chatId).filter((m) => m.createdAt <= share.upto && !SHARE_ACTIVE.has(m.status) && (m.text.trim() || m.attachments.length))
+}
+
+function shareInfo(share: ShareRow): ShareInfo {
+  const all = listMessages(share.chatId).filter((m) => m.text.trim() || m.attachments.length)
+  const count = all.filter((m) => m.createdAt <= share.upto).length
+  return { ...share, url: `${PUBLIC_ORIGIN}/s/${share.token}`, count, newer: all.length - count }
+}
+
+/**
+ * Знімок для глядача: лише текст і вкладення. Хід роботи Hermes (команди, шляхи, результати інструментів)
+ * не показуємо, а великі файли, що лежать на Mac mini без копії, лишаються тільки назвою.
+ */
+function sharedChat(share: ShareRow): SharedChat | null {
+  const chat = getChat(share.chatId)
+  if (!chat) return null
+  const previews: Record<string, LinkPreview> = {}
+  const messages = sharedMessages(share).map((m) => {
+    if (m.role === 'user') for (const u of findUrls(m.text)) previews[u] ??= cachedPreview(u) ?? { url: u, kind: 'link', failed: true }
+    return {
+      id: m.id,
+      role: m.role,
+      text: m.text,
+      attachments: m.attachments.map((a) => (a.ref ? { id: '', name: a.name, mime: a.mime, size: a.size, ref: true } : a)),
+      createdAt: m.createdAt,
+      model: m.model,
+    }
+  })
+  return { title: chat.title || 'Чат з Hermes', sharedAt: share.updatedAt, messages, previews }
+}
+
+const escHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+/** Публічні маршрути спільного доступу: працюють без входу. */
+async function publicApi(req: IncomingMessage, res: ServerResponse, path: string, url: URL): Promise<boolean> {
+  const m = /^\/api\/public\/share\/([\w-]{20,})(?:\/file\/([\w-]+))?$/.exec(path)
+  if (!m || (req.method !== 'GET' && req.method !== 'HEAD')) return false
+  const share = getShare(m[1]!)
+  const noindex = { 'X-Robots-Tag': 'noindex, nofollow' }
+  if (!share) {
+    send(res, 404, { error: 'Посилання недійсне або власник його видалив' }, noindex)
+    return true
+  }
+  if (!m[2]) {
+    const data = sharedChat(share)
+    if (!data) send(res, 404, { error: 'Чат видалено' }, noindex)
+    else send(res, 200, data, noindex)
+    return true
+  }
+  // Файл віддаємо, лише якщо він прикріплений до повідомлення з посилання і скопійований у чат.
+  const fileId = m[2]
+  const allowed = sharedMessages(share).some((x) => x.attachments.some((a) => a.id === fileId && !a.ref))
+  const u = allowed ? getUpload(fileId) : null
+  if (!u || !existsSync(u.path)) {
+    send(res, 404, { error: 'Файл недоступний' }, noindex)
+    return true
+  }
+  serveFile(req, res, u, url.searchParams.has('download'))
+  return true
+}
+
 // ---------- Маршрути API ----------
 
 async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
@@ -557,7 +632,15 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     res.writeHead(204, { 'Cache-Control': 'no-store' })
     return void res.end()
   }
+  if (path.startsWith('/api/public/') && (await publicApi(req, res, path, url))) return
   if (!authed(req)) throw new HttpError(401, 'Потрібен вхід')
+
+  // Картка посилання з повідомлення: заголовок, опис, картинка. Сервер читає сторінку сам (див. unfurl.ts).
+  if (path === '/api/unfurl' && method === 'GET') {
+    const target = url.searchParams.get('url') ?? ''
+    if (!/^https?:\/\//i.test(target) || target.length > 2000) throw new HttpError(400, 'Некоректне посилання')
+    return send(res, 200, await unfurl(target), { 'Cache-Control': 'private, max-age=3600' })
+  }
 
   if (path === '/api/presence' && method === 'POST') {
     const b = await readJson<{ clientId?: string; visible?: boolean; chatId?: string | null }>(req)
@@ -706,6 +789,28 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     return send(res, 200, { ok: true })
   }
   if (path === '/api/messages' && method === 'POST') return send(res, 200, await sendMessage(await readJson(req)))
+
+  // Посилання лише для перегляду: створити, оновити до поточного стану, видалити.
+  const sh = path.match(/^\/api\/chats\/([\w-]+)\/share$/)
+  if (sh) {
+    const chat = getChat(sh[1]!)
+    if (!chat) throw new HttpError(404, 'Чат не знайдено')
+    if (method === 'GET') {
+      const share = getShareByChat(chat.id)
+      return send(res, 200, { share: share ? shareInfo(share) : null })
+    }
+    if (method === 'POST') {
+      const prev = getShareByChat(chat.id)
+      const share = upsertShare(chat.id, prev?.token ?? randomBytes(18).toString('base64url'), Date.now())
+      // Підтягнути картки посилань заздалегідь: глядач бачить лише те, що вже в кеші.
+      for (const m of sharedMessages(share)) if (m.role === 'user') for (const u of findUrls(m.text)) void unfurl(u).catch(() => {})
+      return send(res, 200, { share: shareInfo(share) })
+    }
+    if (method === 'DELETE') {
+      deleteShare(chat.id)
+      return send(res, 200, { share: null })
+    }
+  }
 
   let m = path.match(/^\/api\/chats\/([\w-]+)$/)
   if (m) {
@@ -972,6 +1077,21 @@ if (DEV) {
         ...PAGE_HEADERS,
       })
       res.end(await readFile(file))
+      return
+    }
+    const share = /^\/s\/([\w-]{20,})\/?$/.exec(url.pathname)
+    if (share) {
+      // Сторінка спільного чату: назва для прев'ю в месенджерах і заборона індексації.
+      const s = getShare(share[1]!)
+      const title = s ? (getChat(s.chatId)?.title || 'Чат з Hermes') : 'Посилання недійсне'
+      const meta =
+        `<title>${escHtml(title)} · Hermes</title>` +
+        `<meta property="og:title" content="${escHtml(title)}" />` +
+        `<meta property="og:description" content="Діалог з Hermes · лише перегляд" />` +
+        `<meta property="og:site_name" content="Hermes" />` +
+        `<meta name="robots" content="noindex, nofollow" />`
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', ...PAGE_HEADERS })
+      res.end(index.toString('utf8').replace('<title>Hermes</title>', meta))
       return
     }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...PAGE_HEADERS })

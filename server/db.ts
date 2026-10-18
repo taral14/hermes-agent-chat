@@ -82,6 +82,8 @@ for (const sql of [
   `ALTER TABLE uploads ADD COLUMN ref INTEGER NOT NULL DEFAULT 0`,
   `CREATE TABLE IF NOT EXISTS download_links (token TEXT PRIMARY KEY, upload_id TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS lists (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS link_previews (url TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS shares (token TEXT PRIMARY KEY, chat_id TEXT NOT NULL UNIQUE, upto INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, expires_at INTEGER NOT NULL, ua TEXT NOT NULL DEFAULT '', ip TEXT NOT NULL DEFAULT '')`,
 ]) {
   try {
@@ -233,6 +235,7 @@ export function updateChat(
 
 export function deleteChat(id: string) {
   db.prepare('DELETE FROM chats WHERE id = ?').run(id)
+  db.prepare('DELETE FROM shares WHERE chat_id = ?').run(id)
 }
 
 export function listMessages(chatId: string): MessageRow[] {
@@ -422,6 +425,53 @@ export function getSetting(key: string): string | null {
 
 export function setSetting(key: string, value: string) {
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+}
+
+// ---------- Попередній перегляд посилань ----------
+
+export function getLinkPreview(url: string): { data: string; fetchedAt: number } | null {
+  const r = db.prepare('SELECT data, fetched_at FROM link_previews WHERE url = ?').get(url)
+  return r ? { data: str(r.data), fetchedAt: Number(r.fetched_at) } : null
+}
+
+export function saveLinkPreview(url: string, data: string) {
+  db.prepare('INSERT INTO link_previews (url, data, fetched_at) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at').run(url, data, Date.now())
+}
+
+// ---------- Спільний доступ до чатів ----------
+// Посилання лише для перегляду: знімок чату до моменту `upto`. Новіші повідомлення не видно, доки власник не оновить посилання.
+
+export type ShareRow = { token: string; chatId: string; upto: number; createdAt: number; updatedAt: number }
+
+const shareRow = (r: Record<string, unknown>): ShareRow => ({
+  token: str(r.token),
+  chatId: str(r.chat_id),
+  upto: Number(r.upto),
+  createdAt: Number(r.created_at),
+  updatedAt: Number(r.updated_at),
+})
+
+export function getShareByChat(chatId: string): ShareRow | null {
+  const r = db.prepare('SELECT * FROM shares WHERE chat_id = ?').get(chatId)
+  return r ? shareRow(r) : null
+}
+
+export function getShare(token: string): ShareRow | null {
+  const r = db.prepare('SELECT * FROM shares WHERE token = ?').get(token)
+  return r ? shareRow(r) : null
+}
+
+/** Створити посилання або оновити наявне до поточного стану чату (токен лишається той самий). */
+export function upsertShare(chatId: string, token: string, upto: number): ShareRow {
+  const now = Date.now()
+  db.prepare(
+    'INSERT INTO shares (token, chat_id, upto, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(chat_id) DO UPDATE SET upto = excluded.upto, updated_at = excluded.updated_at',
+  ).run(token, chatId, upto, now, now)
+  return getShareByChat(chatId)!
+}
+
+export function deleteShare(chatId: string) {
+  db.prepare('DELETE FROM shares WHERE chat_id = ?').run(chatId)
 }
 
 // ---------- Сесії входу ----------
