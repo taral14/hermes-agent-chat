@@ -25,7 +25,7 @@ export class HermesError extends Error {
   }
 }
 
-async function call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
+export async function call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
   let res: Response
   try {
     res = await fetch(BASE + path, {

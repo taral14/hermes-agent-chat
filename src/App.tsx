@@ -2,6 +2,7 @@ import { ArrowDown, Menu, PanelLeftOpen, SquarePen } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { api } from './api.ts'
 import { Composer, type ComposerHandle } from './components/Composer.tsx'
+import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { Login } from './components/Login.tsx'
 import { MessageView } from './components/MessageView.tsx'
 import { ModelPicker } from './components/ModelPicker.tsx'
@@ -10,6 +11,13 @@ import type { Attachment, Chat, Message, ModelChoice, ModelOptions, ServerEvent 
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
 const chatIdFromPath = () => /^\/c\/([\w-]+)/.exec(location.pathname)?.[1] ?? null
+function jobsFromPath(): JobsRoute | null {
+  const m = /^\/jobs(?:\/([\w-]+))?\/?$/.exec(location.pathname)
+  if (!m) return null
+  if (!m[1]) return { kind: 'list' }
+  return m[1] === 'new' ? { kind: 'new' } : { kind: 'job', id: m[1] }
+}
+const jobsPath = (r: JobsRoute) => (r.kind === 'list' ? '/jobs' : r.kind === 'new' ? '/jobs/new' : `/jobs/${r.id}`)
 const isNarrow = () => matchMedia('(max-width: 768px)').matches
 
 const SUGGESTIONS = [
@@ -36,6 +44,7 @@ export default function App() {
   const [username, setUsername] = useState('')
   const [chats, setChats] = useState<Chat[]>([])
   const [currentId, setCurrentId] = useState<string | null>(chatIdFromPath)
+  const [jobsRoute, setJobsRoute] = useState<JobsRoute | null>(jobsFromPath)
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [models, setModels] = useState<ModelOptions | null>(null)
   const [newModel, setNewModel] = useState<ModelChoice>(null)
@@ -120,20 +129,34 @@ export default function App() {
   const navigate = (id: string | null, replace = false) => {
     const url = id ? `/c/${id}` : '/'
     if (location.pathname !== url) history[replace ? 'replaceState' : 'pushState'](null, '', url)
+    setJobsRoute(null)
     setCurrentId(id)
     stick.current = true
     if (isNarrow()) setSidebar(false)
   }
 
+  const goJobs = useCallback((r: JobsRoute | null) => {
+    if (!r) return navigate(null)
+    const url = jobsPath(r)
+    if (location.pathname !== url) history.pushState(null, '', url)
+    setJobsRoute(r)
+    setCurrentId(null)
+    if (isNarrow()) setSidebar(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
-    const onPop = () => setCurrentId(chatIdFromPath())
+    const onPop = () => {
+      setCurrentId(chatIdFromPath())
+      setJobsRoute(jobsFromPath())
+    }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
   useEffect(() => {
-    document.title = current?.title ? `${current.title} · Hermes` : 'Hermes'
-  }, [current?.title])
+    document.title = jobsRoute ? 'Розклад · Hermes' : current?.title ? `${current.title} · Hermes` : 'Hermes'
+  }, [current?.title, jobsRoute])
 
   // ---------- Прокрутка ----------
 
@@ -152,10 +175,10 @@ export default function App() {
 
   // ---------- Дії ----------
 
-  const flash = (e: unknown) => {
+  const flash = useCallback((e: unknown) => {
     setError((e as Error).message)
     setTimeout(() => setError(''), 6000)
-  }
+  }, [])
 
   const send = async (text: string, attachments: Attachment[]) => {
     try {
@@ -253,6 +276,8 @@ export default function App() {
             username={username}
             onSelect={(id) => navigate(id)}
             onNew={newChat}
+            jobsActive={Boolean(jobsRoute)}
+            onJobs={() => goJobs({ kind: 'list' })}
             onClose={() => setSidebar(false)}
             onRename={(id, title) => {
               setChats((c) => c.map((x) => (x.id === id ? { ...x, title } : x)))
@@ -274,7 +299,7 @@ export default function App() {
       <main
         className="main"
         onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes('Files')) return
+          if (jobsRoute || !e.dataTransfer.types.includes('Files')) return
           e.preventDefault()
           setDragging(true)
         }}
@@ -287,6 +312,10 @@ export default function App() {
           if (e.dataTransfer.files.length) composer.current?.addFiles(e.dataTransfer.files)
         }}
       >
+        {jobsRoute ? (
+          <JobsView route={jobsRoute} go={goJobs} sidebarOpen={sidebar} openSidebar={() => setSidebar(true)} flash={flash} />
+        ) : (
+          <>
         {header}
         {empty ? (
           <div className="welcome">
@@ -322,6 +351,8 @@ export default function App() {
               </button>
             )}
             <div className="bottom">{composerEl}</div>
+          </>
+        )}
           </>
         )}
         {dragging && <div className="drop-overlay">Перетягни файли сюди, щоб додати їх до повідомлення</div>}

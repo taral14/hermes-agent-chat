@@ -1,4 +1,4 @@
-import type { Attachment, Chat, Message, ModelChoice, ModelOptions } from './shared.ts'
+import type { Attachment, Chat, Job, JobRun, Message, ModelChoice, ModelOptions } from './shared.ts'
 
 export class ApiError extends Error {
   status: number
@@ -41,6 +41,14 @@ export const api = {
   clarify: (messageId: string, promptId: string, generation: number, value: string) =>
     req('POST', `/api/messages/${messageId}/clarify`, { promptId, generation, value }),
   models: () => req<ModelOptions>('GET', '/api/models'),
+  jobs: () => req<Job[]>('GET', '/api/jobs'),
+  job: (id: string) => req<Job>('GET', `/api/jobs/${id}`),
+  createJob: (body: JobInput) => req<Job>('POST', '/api/jobs', body),
+  updateJob: (id: string, body: Partial<JobInput> & { enabled?: boolean }) => req<Job>('PATCH', `/api/jobs/${id}`, body),
+  deleteJob: (id: string) => req('DELETE', `/api/jobs/${id}`),
+  jobAction: (id: string, action: 'pause' | 'resume' | 'run') => req<Job>('POST', `/api/jobs/${id}/${action}`),
+  jobRuns: (id: string) => req<JobRun[]>('GET', `/api/jobs/${id}/runs`),
+  runOutput: (sessionId: string) => req<{ output: string }>('GET', `/api/jobs/runs/${sessionId}`),
   async upload(file: File): Promise<Attachment> {
     const res = await fetch('/api/uploads', {
       method: 'POST',
@@ -53,5 +61,7 @@ export const api = {
     return data
   },
 }
+
+export type JobInput = { name: string; prompt: string; schedule: string; deliver: string; repeat?: number | null }
 
 export const uploadUrl = (id: string) => `/api/uploads/${id}`

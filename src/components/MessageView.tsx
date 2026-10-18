@@ -30,6 +30,7 @@ import {
 import { memo, useEffect, useState } from 'react'
 import { api, uploadUrl } from '../api.ts'
 import type { Attachment, Message, Part } from '../shared.ts'
+import { AudioPlayer } from './AudioPlayer.tsx'
 import { CopyButton, Markdown } from './Markdown.tsx'
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
@@ -129,10 +130,7 @@ function Attachments({ items, side }: { items: Attachment[]; side: 'user' | 'ass
             <img src={uploadUrl(a.id)} alt={a.name} loading="lazy" />
           </a>
         ) : a.mime.startsWith('audio/') ? (
-          <div key={a.id} className="att-media att-audio">
-            <FileCard a={a} />
-            <audio controls preload="metadata" src={uploadUrl(a.id)} />
-          </div>
+          <AudioPlayer key={a.id} a={a} />
         ) : a.mime.startsWith('video/') ? (
           <div key={a.id} className="att-media att-video">
             <video controls playsInline preload="metadata" src={uploadUrl(a.id)} />

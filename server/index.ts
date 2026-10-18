@@ -34,6 +34,7 @@ import {
   steerRun,
   stopRun,
 } from './hermes.ts'
+import { createJob, deleteJob, getJob, jobAction, jobRuns, listJobs, runOutput, updateJob } from './jobs.ts'
 import { CHAT_INSTRUCTIONS, mimeOf } from './media.ts'
 import {
   addSteer,
@@ -442,6 +443,34 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
     if (req.method === 'HEAD') return void res.end()
     createReadStream(u.path).pipe(res)
     return
+  }
+
+  // ---------- Розклад (cron-задачі Hermes) ----------
+  if (path.startsWith('/api/jobs')) {
+    try {
+      if (path === '/api/jobs' && method === 'GET') return send(res, 200, await listJobs())
+      if (path === '/api/jobs' && method === 'POST') return send(res, 200, await createJob(await readJson(req)))
+      const run = path.match(/^\/api\/jobs\/runs\/([\w-]+)$/)
+      if (run && method === 'GET') return send(res, 200, { output: await runOutput(run[1]!) })
+      const j = path.match(/^\/api\/jobs\/([\w-]+)(?:\/(runs|pause|resume|run))?$/)
+      if (j) {
+        const [, id, sub] = j as unknown as [string, string, string | undefined]
+        if (!sub && method === 'GET') return send(res, 200, await getJob(id))
+        if (!sub && method === 'PATCH') return send(res, 200, await updateJob(id, await readJson(req)))
+        if (!sub && method === 'DELETE') {
+          await deleteJob(id)
+          return send(res, 200, { ok: true })
+        }
+        if (sub === 'runs' && method === 'GET') return send(res, 200, await jobRuns(id))
+        if (sub && sub !== 'runs' && method === 'POST') {
+          const job = await jobAction(id, sub as 'pause' | 'resume' | 'run')
+          return send(res, 200, job ?? (await getJob(id)))
+        }
+      }
+    } catch (err) {
+      if (err instanceof HermesError) throw new HttpError(err.status >= 400 && err.status < 500 ? err.status : 502, err.message)
+      throw err
+    }
   }
 
   throw new HttpError(404, 'Невідомий маршрут')

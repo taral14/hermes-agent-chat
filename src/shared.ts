@@ -80,6 +80,45 @@ export type ModelOptions = {
   providers: { slug: string; name: string; models: string[]; reasoning: Record<string, boolean> }[]
 }
 
+export type JobSchedule =
+  | { kind: 'cron'; expr: string; display?: string }
+  | { kind: 'interval'; minutes: number; display?: string }
+  | { kind: 'once'; run_at: string; display?: string }
+
+/** Задача за розкладом Hermes (cron). Поля як у /api/jobs Hermes. */
+export type Job = {
+  id: string
+  name: string
+  prompt: string
+  schedule: JobSchedule
+  schedule_display?: string
+  enabled: boolean
+  state: string
+  paused_at: string | null
+  next_run_at: string | null
+  last_run_at: string | null
+  last_status: string | null
+  last_error: string | null
+  last_delivery_error: string | null
+  deliver: string
+  origin: { platform?: string; chat_name?: string } | null
+  repeat: { times: number | null; completed: number }
+  no_agent?: boolean
+  script?: string | null
+  skills?: string[]
+  created_at?: string
+}
+
+export type JobRun = {
+  sessionId: string
+  title: string
+  startedAt: number
+  endedAt: number | null
+  endReason: string | null
+  messages: number
+  tools: number
+}
+
 /** Повідомлення серверної SSE-шини /api/events. */
 export type ServerEvent =
   | { type: 'message'; message: Message }

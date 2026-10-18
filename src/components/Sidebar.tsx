@@ -1,4 +1,4 @@
-import { LogOut, MoreHorizontal, PanelLeftClose, Pencil, Pin, PinOff, Search, SquarePen, Trash2, X } from 'lucide-react'
+import { CalendarClock, LogOut, MoreHorizontal, PanelLeftClose, Pencil, Pin, PinOff, Search, SquarePen, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Chat } from '../shared.ts'
 
@@ -13,6 +13,8 @@ type Props = {
   onDelete: (id: string) => void
   onClose: () => void
   onLogout: () => void
+  onJobs: () => void
+  jobsActive: boolean
 }
 
 function groupOf(ts: number): string {
@@ -141,6 +143,12 @@ export function Sidebar(p: Props) {
       <button type="button" className="new-chat" onClick={p.onNew}>
         <span className="brand-mark">H</span>
         <span>Hermes</span>
+      </button>
+      <button type="button" className={`nav-row ${p.jobsActive ? 'is-active' : ''}`} onClick={p.onJobs}>
+        <span className="nav-icon">
+          <CalendarClock size={18} />
+        </span>
+        <span>Розклад</span>
       </button>
       {searching && (
         <div className="sidebar-search">
