@@ -1,4 +1,4 @@
-import { Check, Copy } from 'lucide-react'
+import { BookOpen, Check, Copy } from 'lucide-react'
 import { memo, useState, type ReactNode } from 'react'
 import ReactMarkdown, { type Components, defaultUrlTransform } from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
@@ -50,16 +50,20 @@ const components: Components = {
   a({ href, children }) {
     // Посилання Hermes на нотатки Obsidian відкриваються в базі знань чату.
     if (href?.startsWith('obsidian://')) {
+      // Текст посилання — сама адреса? Показуємо назву нотатки.
+      const text = textOf(children)
+      const label = !text || text.startsWith('obsidian://') ? obsidianTitle(href) : children
       return (
         <a
           href={href}
-          className="kb-link"
+          className="note-chip"
           onClick={(e) => {
             e.preventDefault()
             window.dispatchEvent(new CustomEvent('chat:obsidian', { detail: href }))
           }}
         >
-          {children}
+          <BookOpen size={15} />
+          <span>{label}</span>
         </a>
       )
     }
@@ -78,6 +82,36 @@ const components: Components = {
   },
 }
 
+/** Назва нотатки з obsidian://open?...&file=Сховище%2FПапка%2FНазва → «Назва». */
+function obsidianTitle(href: string): string {
+  try {
+    const file = new URL(href).searchParams.get('file') ?? ''
+    return file.split('/').pop()?.replace(/\.md$/i, '') || 'Нотатка'
+  } catch {
+    return 'Нотатка'
+  }
+}
+
+/**
+ * Hermes часто пише obsidian://… голим текстом, а Markdown автоматично робить посиланнями лише http(s).
+ * Обгортаємо такі адреси в посилання (окрім коду), щоб вони відкривались у базі знань.
+ */
+function linkifyObsidian(text: string): string {
+  if (!text.includes('obsidian://')) return text
+  return text
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+    .map((chunk, i) =>
+      i % 2 === 1
+        ? chunk
+        : chunk.replace(/(^|[^(<\]"'])(obsidian:\/\/[^\s<>)\]"'`]+)/g, (_all, pre: string, url: string) => {
+            const clean = url.replace(/[.,;:!?]+$/, '')
+            const tail = url.slice(clean.length)
+            return `${pre}[${obsidianTitle(clean).replace(/[[\]]/g, '')}](${clean})${tail}`
+          }),
+    )
+    .join('')
+}
+
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
     <div className="md">
@@ -87,7 +121,7 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
         components={components}
         urlTransform={(url) => (url.startsWith('obsidian://') ? url : defaultUrlTransform(url))}
       >
-        {text}
+        {linkifyObsidian(text)}
       </ReactMarkdown>
     </div>
   )

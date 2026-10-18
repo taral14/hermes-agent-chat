@@ -4175,3 +4175,45 @@ button.act-line:hover:not(:disabled) {
     display: none;
   }
 }
+
+/* Посилання на нотатку Obsidian у відповіді Hermes */
+.md .note-chip,
+.note-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 11px 3px 9px;
+  margin: 1px 0;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.1);
+  color: #6d28d9;
+  font-weight: 500;
+  font-size: 0.94em;
+  line-height: 1.5;
+  text-decoration: none;
+  vertical-align: baseline;
+}
+
+.note-chip span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.note-chip svg {
+  flex-shrink: 0;
+}
+
+.md .note-chip:hover {
+  background: rgba(124, 58, 237, 0.18);
+  text-decoration: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .md .note-chip,
+  .note-chip {
+    background: rgba(167, 139, 250, 0.14);
+    color: #c4b5fd;
+  }
+}
