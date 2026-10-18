@@ -1,6 +1,7 @@
 import { ArrowUp, Check, ChevronDown, FileText, Hand, ListChecks, Loader2, MessageSquarePlus, Paperclip, Sparkles, Square, SquareSlash, X, Zap, type LucideIcon } from 'lucide-react'
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { type CommandInfo, api, uploadUrl } from '../api.ts'
+import { getPrefs } from '../prefs.ts'
 import type { Attachment, ChatMode } from '../shared.ts'
 
 type Pending = { key: string; name: string; mime: string; preview?: string; att?: Attachment; error?: string }
@@ -249,6 +250,8 @@ export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, comm
               return onMode(MODES[(i + 1) % MODES.length]!.mode)
             }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !matchMedia('(pointer: coarse)').matches) {
+              // «Enter надсилає» вимкнено в налаштуваннях: надсилає ⌘/Ctrl+Enter, а Enter переносить рядок.
+              if (!getPrefs().enterSends && !e.metaKey && !e.ctrlKey) return
               e.preventDefault()
               void submit()
             }

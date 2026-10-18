@@ -54,6 +54,11 @@ class Gateway {
   /** Сесії, на які підписаний поточний міст (після перезапуску — порожньо). */
   attached = new Set<string>()
 
+  /** Міст до Hermes піднятий і готовий приймати запити. */
+  get connected() {
+    return this.ready
+  }
+
   on(l: Partial<Listeners>) {
     this.listeners = { ...this.listeners, ...l }
   }

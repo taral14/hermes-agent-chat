@@ -32,6 +32,7 @@ import { api, isPublicView, uploadUrl } from '../api.ts'
 import type { Attachment, Message, Part } from '../shared.ts'
 import { fileKind, formatSize } from '../fileKind.ts'
 import { AudioPlayer } from './AudioPlayer.tsx'
+import { usePrefs } from '../prefs.ts'
 import { LinkPreviews, LinkText } from './Links.tsx'
 import { CopyButton, Markdown } from './Markdown.tsx'
 
@@ -542,11 +543,12 @@ function ActivityRow({ p }: { p: Part }) {
 }
 
 function Activity({ m, parts, active }: { m: Message; parts: Part[]; active: boolean }) {
-  const [open, setOpen] = useState(active)
-  // Під час роботи хід видно одразу; коли Hermes закінчив, згортаємо, як ChatGPT.
+  const { expandActivity } = usePrefs()
+  const [open, setOpen] = useState(active || expandActivity)
+  // Під час роботи хід видно одразу; коли Hermes закінчив, згортаємо, як ChatGPT (якщо в налаштуваннях не просили лишати).
   useEffect(() => {
-    setOpen(active)
-  }, [active])
+    setOpen(active || expandActivity)
+  }, [active, expandActivity])
   const now = useNow(active)
   const steps = parts.filter((p) => p.type === 'tool' || p.type === 'subagent').length
   const elapsed = (m.finishedAt ?? now) - m.createdAt
@@ -609,6 +611,7 @@ function splitParts(m: Message): { activity: Part[]; answer: string } {
 
 function AssistantMessage({ m }: { m: Message }) {
   const actions = useContext(ActionsContext)
+  const { showMeta } = usePrefs()
   const active = ACTIVE.has(m.status)
   const { activity, answer } = splitParts(m)
   const pending = m.parts.filter(
@@ -655,7 +658,7 @@ function AssistantMessage({ m }: { m: Message }) {
               </ActionButton>
             </>
           )}
-          {(m.model || m.usage?.total_tokens) && (
+          {showMeta && (m.model || m.usage?.total_tokens) && (
             <span className="msg-meta">
               {m.model}
               {m.model && m.usage?.total_tokens ? ' · ' : ''}

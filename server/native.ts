@@ -21,7 +21,7 @@ import {
 } from './db.ts'
 import { type GatewayEvent, GatewayError, type ServerRequest, gateway } from './gateway.ts'
 import { defaultEffort } from './hermes.ts'
-import { CHAT_INSTRUCTIONS } from './media.ts'
+import { chatInstructions } from './prefs.ts'
 import { promptRaised } from './push.ts'
 import {
   type Live,
@@ -153,7 +153,7 @@ function apiText(text: string, attachments: Attachment[]): string {
   const files = lines.length
     ? `\n\n[Прикріплені файли. Вони збережені на цьому комп'ютері, відкривай їх своїми інструментами за потреби:]\n${lines.join('\n')}`
     : ''
-  return `[${CHAT_INSTRUCTIONS}]\n\n${text || 'Подивись прикріплені файли.'}${files}`
+  return `[${chatInstructions()}]\n\n${text || 'Подивись прикріплені файли.'}${files}`
 }
 
 /** Картинки Hermes бачить напряму, але бере їх лише зі своєї теки кешу. */

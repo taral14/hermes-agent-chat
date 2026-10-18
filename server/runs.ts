@@ -1,7 +1,8 @@
 // Ведення запусків Hermes: сервер сам слухає події, зберігає їх у SQLite і розсилає вкладкам.
 // Тому довга задача не залежить від відкритого браузера, а після перезапуску сервера підхоплюється знову.
 import type { Message, Part } from '../src/shared.ts'
-import { type MessageRow, activeMessages, answersWithoutFiles, getChat, getMessage, saveMessage, updateChat } from './db.ts'
+import { type MessageRow, activeMessages, answersWithoutFiles, getChat, getMessage, listMessages, saveMessage, updateChat } from './db.ts'
+import { chatPrefs } from './prefs.ts'
 import { collectMedia } from './media.ts'
 import { promptRaised, runFinished } from './push.ts'
 import {
@@ -112,6 +113,17 @@ export function finish(l: Live, status: Message['status'], patch: { text?: strin
 
 /** Hermes сам придумує назву сесії після перших реплік; підтягуємо її, якщо користувач не перейменовував. */
 export async function refreshTitle(chatId: string) {
+  if (!chatPrefs().autoTitles) {
+    // Автоназви вимкнено: назва — початок першого повідомлення, і більше не змінюється.
+    const chat = getChat(chatId)
+    if (!chat || chat.titleSource === 'user' || chat.title) return
+    const first = listMessages(chatId).find((m) => m.role === 'user' && m.text.trim())
+    if (!first) return
+    const line = first.text.trim().split('\n')[0]!.replace(/\s+/g, ' ')
+    updateChat(chatId, { title: line.length > 60 ? `${line.slice(0, 59)}…` : line, titleSource: 'text' })
+    chatChanged(chatId)
+    return
+  }
   for (const delay of [1500, 8000, 25000]) {
     await new Promise((r) => setTimeout(r, delay))
     const chat = getChat(chatId)

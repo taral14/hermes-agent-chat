@@ -8,13 +8,14 @@ import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { Login } from './components/Login.tsx'
 import { Notifications } from './components/Notifications.tsx'
 import { Security } from './components/Security.tsx'
+import { Settings } from './components/Settings.tsx'
 import { ShareSheet } from './components/ShareSheet.tsx'
 import { reportPresence } from './push.ts'
 import { ActionsContext, type MessageActions, MessageView } from './components/MessageView.tsx'
 import { GoalBar } from './components/GoalBar.tsx'
 import { ModelPicker } from './components/ModelPicker.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
-import type { Attachment, Chat, ChatList, ChatMode, Message, ModelChoice, ModelOptions, ServerEvent } from './shared.ts'
+import type { Attachment, Chat, ChatList, ChatMode, ChatPrefs, Message, ModelChoice, ModelOptions, ServerEvent } from './shared.ts'
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
 const chatIdFromPath = () => /^\/c\/([\w-]+)/.exec(location.pathname)?.[1] ?? null
@@ -89,6 +90,9 @@ export default function App() {
   const [notif, setNotif] = useState(false)
   const [security, setSecurity] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  /** Спільні налаштування: режим і модель, з якими стартують нові чати. */
+  const defaults = useRef<ChatPrefs | null>(null)
   const [atBottom, setAtBottom] = useState(true)
   const scroller = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
@@ -133,6 +137,14 @@ export default function App() {
     void loadChats()
     api.models().then(setModels).catch(() => {})
     api.commands().then(setCommands).catch(() => {})
+    api
+      .settings()
+      .then((i) => {
+        defaults.current = i.prefs
+        setNewMode(i.prefs.defaultMode)
+        setNewModel(i.prefs.defaultModel)
+      })
+      .catch(() => {})
     api.lists().then(setLists).catch(() => {})
   }, [auth, loadChats])
 
@@ -308,7 +320,8 @@ export default function App() {
       })
       stick.current = true
       if (!currentId) {
-        setNewModel(null)
+        setNewModel(defaults.current?.defaultModel ?? null)
+        setNewMode(defaults.current?.defaultMode ?? 'auto')
         setNewListId(null)
         navigate(r.chat.id)
       }
@@ -473,13 +486,9 @@ export default function App() {
             onJobs={() => goJobs({ kind: 'list' })}
             onKb={() => goKb({ kind: 'home' })}
             kbActive={Boolean(kbRoute)}
-            onNotifications={() => {
+            onSettings={() => {
               if (isNarrow()) setSidebar(false)
-              setNotif(true)
-            }}
-            onSecurity={() => {
-              if (isNarrow()) setSidebar(false)
-              setSecurity(true)
+              setSettingsOpen(true)
             }}
             onClose={() => setSidebar(false)}
             lists={lists}
@@ -524,7 +533,6 @@ export default function App() {
               if (id === currentId) navigate(null, true)
               api.deleteChat(id).catch(flash)
             }}
-            onLogout={() => api.logout().finally(() => setAuth('out'))}
           />
         </>
       )}
@@ -613,6 +621,32 @@ export default function App() {
         )}
         {dragging && <div className="drop-overlay">Перетягни файли сюди, щоб додати їх до повідомлення</div>}
         {error && <div className="toast">{error}</div>}
+        {settingsOpen && (
+          <Settings
+            narrow={narrow}
+            username={username}
+            models={models}
+            onClose={() => setSettingsOpen(false)}
+            onNotifications={() => setNotif(true)}
+            onSecurity={() => setSecurity(true)}
+            onLogout={() => {
+              setSettingsOpen(false)
+              void api.logout().finally(() => setAuth('out'))
+            }}
+            onPrefs={(p) => {
+              const prev = defaults.current
+              defaults.current = p
+              // Нового чату ще не почато: одразу показуємо нові значення за замовчуванням.
+              if (prev?.defaultMode !== p.defaultMode) setNewMode(p.defaultMode)
+              if (JSON.stringify(prev?.defaultModel) !== JSON.stringify(p.defaultModel)) setNewModel(p.defaultModel)
+            }}
+            onDeletedAll={() => {
+              setChats([])
+              setMessages({})
+              navigate(null, true)
+            }}
+          />
+        )}
         {notif && <Notifications onClose={() => setNotif(false)} />}
         {security && <Security onClose={() => setSecurity(false)} />}
         {sharing && current && <ShareSheet chat={current} onClose={() => setSharing(false)} />}

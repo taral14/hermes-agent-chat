@@ -160,6 +160,29 @@ export type ServerEvent =
   /** Hermes змінив нотатки в базі знань. */
   | { type: 'kb'; paths: string[] }
 
+// ---------- Налаштування ----------
+
+/** Налаштування чату, спільні для всіх пристроїв (лежать на сервері). */
+export type ChatPrefs = {
+  /** Режим нових чатів. */
+  defaultMode: ChatMode
+  /** Модель і зусилля нових чатів; null — як у налаштуваннях Hermes. */
+  defaultModel: ModelChoice
+  /** Особисті інструкції: додаються до кожного запиту з чату. */
+  instructions: string
+  /** Hermes сам дає назви чатам; інакше назва — початок першого повідомлення. */
+  autoTitles: boolean
+}
+
+export type SettingsInfo = {
+  prefs: ChatPrefs
+  about: { version: string; startedAt: number; hermes: boolean; vault: boolean }
+}
+
+export type StorageInfo = { files: number; bytes: number; macFiles: number; linkCache: number; dbBytes: number }
+
+export type ShareListItem = { chatId: string; title: string; url: string; updatedAt: number }
+
 // ---------- Посилання і спільний доступ ----------
 
 /** Картка посилання: заголовок, опис і картинка зі сторінки (Open Graph), для YouTube — з oEmbed. */

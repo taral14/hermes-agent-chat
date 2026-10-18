@@ -1,4 +1,21 @@
-import type { Attachment, Chat, ChatList, ChatMode, Job, JobRun, LinkPreview, Message, ModelChoice, ModelOptions, ShareInfo, SharedChat } from './shared.ts'
+import type {
+  Attachment,
+  Chat,
+  ChatList,
+  ChatMode,
+  ChatPrefs,
+  Job,
+  JobRun,
+  LinkPreview,
+  Message,
+  ModelChoice,
+  ModelOptions,
+  SettingsInfo,
+  ShareInfo,
+  ShareListItem,
+  SharedChat,
+  StorageInfo,
+} from './shared.ts'
 
 export class ApiError extends Error {
   status: number
@@ -58,6 +75,12 @@ export const api = {
   jobAction: (id: string, action: 'pause' | 'resume' | 'run') => req<Job>('POST', `/api/jobs/${id}/${action}`),
   jobRuns: (id: string) => req<JobRun[]>('GET', `/api/jobs/${id}/runs`),
   runOutput: (sessionId: string) => req<{ output: string }>('GET', `/api/jobs/runs/${sessionId}`),
+  settings: () => req<SettingsInfo>('GET', '/api/settings'),
+  patchSettings: (patch: Partial<ChatPrefs>) => req<ChatPrefs>('PATCH', '/api/settings', patch),
+  shares: () => req<ShareListItem[]>('GET', '/api/shares'),
+  storage: () => req<StorageInfo>('GET', '/api/storage'),
+  clearLinkCache: () => req<StorageInfo>('DELETE', '/api/storage/link-cache'),
+  deleteAllChats: () => req<{ deleted: number }>('POST', '/api/chats/delete-all', { confirm: 'видалити' }),
   share: (chatId: string) => req<{ share: ShareInfo | null }>('GET', `/api/chats/${chatId}/share`),
   createShare: (chatId: string) => req<{ share: ShareInfo }>('POST', `/api/chats/${chatId}/share`),
   deleteShare: (chatId: string) => req<{ share: null }>('DELETE', `/api/chats/${chatId}/share`),

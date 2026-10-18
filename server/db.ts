@@ -333,6 +333,11 @@ export function getUpload(id: string): UploadRow | null {
   return r ? { id: str(r.id), name: str(r.name), mime: str(r.mime), size: Number(r.size), path: str(r.path), ...(r.ref ? { ref: true } : {}) } : null
 }
 
+/** Розмір і тип усіх файлів чату (для «Налаштування → Дані»). */
+export function listUploads(): { size: number; ref: boolean }[] {
+  return db.prepare('SELECT size, ref FROM uploads').all().map((r) => ({ size: Number(r.size), ref: Boolean(r.ref) }))
+}
+
 export type PushSub = { endpoint: string; keys: { p256dh: string; auth: string }; settings: PushSettings; ua: string }
 export const DEFAULT_PUSH: PushSettings = { replies: true, prompts: true, jobs: false }
 
@@ -438,6 +443,14 @@ export function saveLinkPreview(url: string, data: string) {
   db.prepare('INSERT INTO link_previews (url, data, fetched_at) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at').run(url, data, Date.now())
 }
 
+export function countLinkPreviews(): number {
+  return Number((db.prepare('SELECT COUNT(*) AS n FROM link_previews').get() as { n: number }).n)
+}
+
+export function clearLinkPreviews() {
+  db.prepare('DELETE FROM link_previews').run()
+}
+
 // ---------- Спільний доступ до чатів ----------
 // Посилання лише для перегляду: знімок чату до моменту `upto`. Новіші повідомлення не видно, доки власник не оновить посилання.
 
@@ -468,6 +481,10 @@ export function upsertShare(chatId: string, token: string, upto: number): ShareR
     'INSERT INTO shares (token, chat_id, upto, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(chat_id) DO UPDATE SET upto = excluded.upto, updated_at = excluded.updated_at',
   ).run(token, chatId, upto, now, now)
   return getShareByChat(chatId)!
+}
+
+export function listShares(): ShareRow[] {
+  return db.prepare('SELECT * FROM shares ORDER BY updated_at DESC').all().map(shareRow)
 }
 
 export function deleteShare(chatId: string) {

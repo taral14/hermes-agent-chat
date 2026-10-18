@@ -1,5 +1,4 @@
 import {
-  Bell,
   BookOpen,
   CalendarClock,
   Check,
@@ -7,7 +6,6 @@ import {
   Folder,
   FolderMinus,
   FolderPlus,
-  LogOut,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
@@ -16,7 +14,6 @@ import {
   Plus,
   Search,
   Settings,
-  ShieldCheck,
   SquarePen,
   Trash2,
   X,
@@ -42,13 +39,11 @@ type Props = {
   onDeleteList: (id: string) => void
   onNewInList: (listId: string) => void
   onClose: () => void
-  onLogout: () => void
+  onSettings: () => void
   onJobs: () => void
   jobsActive: boolean
   onKb: () => void
   kbActive: boolean
-  onNotifications: () => void
-  onSecurity: () => void
 }
 
 function groupOf(ts: number): string {
@@ -361,43 +356,9 @@ function ListBlock({ list, chats, p, closed, toggle, item }: {
   )
 }
 
-/** Шторка налаштувань із шестерні (телефон). */
-function SettingsSheet({ username, onClose, items }: {
-  username: string
-  onClose: () => void
-  items: { label: string; icon: ReactNode; danger?: boolean; run: () => void }[]
-}) {
-  return createPortal(
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet action-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grip" />
-        <div className="settings-user">
-          <span className="avatar big">{username.slice(0, 1).toUpperCase()}</span>
-          <span>{username}</span>
-        </div>
-        {items.map((it) => (
-          <button
-            key={it.label}
-            type="button"
-            className={`action-row ${it.danger ? 'danger' : ''}`}
-            onClick={() => {
-              onClose()
-              it.run()
-            }}
-          >
-            {it.icon} {it.label}
-          </button>
-        ))}
-      </div>
-    </div>,
-    document.body,
-  )
-}
-
 export function Sidebar(p: Props) {
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
-  const [settings, setSettings] = useState(false)
   const [closedLists, setClosedLists] = useState(readClosed)
   const [newList, setNewList] = useState<string | null>(null)
 
@@ -580,37 +541,18 @@ export function Sidebar(p: Props) {
             <SquarePen size={22} />
             <span>Чат</span>
           </button>
-          <button type="button" className="m-round" aria-label="Налаштування" onClick={() => setSettings(true)}>
+          <button type="button" className="m-round" aria-label="Налаштування" onClick={p.onSettings}>
             <Settings size={22} />
           </button>
         </div>
       ) : (
         <div className="sidebar-foot">
-          <div className="user-row">
+          <button type="button" className="user-row is-button" onClick={p.onSettings} title="Налаштування">
             <span className="avatar">{p.username.slice(0, 1).toUpperCase()}</span>
             <span className="user-name">{p.username}</span>
-            <button type="button" className="icon-btn" title="Вхід і безпека" aria-label="Вхід і безпека" onClick={p.onSecurity}>
-              <ShieldCheck size={17} />
-            </button>
-            <button type="button" className="icon-btn" title="Сповіщення" aria-label="Сповіщення" onClick={p.onNotifications}>
-              <Bell size={17} />
-            </button>
-            <button type="button" className="icon-btn" title="Вийти" aria-label="Вийти" onClick={p.onLogout}>
-              <LogOut size={17} />
-            </button>
-          </div>
+            <Settings size={18} className="user-row-gear" />
+          </button>
         </div>
-      )}
-      {settings && (
-        <SettingsSheet
-          username={p.username}
-          onClose={() => setSettings(false)}
-          items={[
-            { label: 'Сповіщення', icon: <Bell size={20} />, run: p.onNotifications },
-            { label: 'Вхід і безпека', icon: <ShieldCheck size={20} />, run: p.onSecurity },
-            { label: 'Вийти', icon: <LogOut size={20} />, danger: true, run: p.onLogout },
-          ]}
-        />
       )}
     </nav>
   )

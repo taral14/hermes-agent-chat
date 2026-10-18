@@ -124,7 +124,7 @@ export function KbGraph({ nodes: input, edges: inputEdges, focus, onOpen }: Prop
   useEffect(() => {
     const el = canvas.current!
     const ctx = el.getContext('2d')!
-    const dark = matchMedia('(prefers-color-scheme: dark)').matches
+    const dark = document.documentElement.dataset.scheme === 'dark'
     const render = () => {
       const st = state.current
       const dpr = window.devicePixelRatio || 1

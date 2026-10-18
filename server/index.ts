@@ -4,13 +4,29 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import type { Attachment, ChatMode, LinkPreview, ModelChoice, ServerEvent, ShareInfo, SharedChat } from '../src/shared.ts'
+import type {
+  Attachment,
+  ChatMode,
+  LinkPreview,
+  ModelChoice,
+  ServerEvent,
+  SettingsInfo,
+  ShareInfo,
+  ShareListItem,
+  SharedChat,
+  StorageInfo,
+} from '../src/shared.ts'
+import { execFileSync } from 'node:child_process'
 import { findUrls } from '../src/links.ts'
 import { cachedPreview, unfurl } from './unfurl.ts'
 import {
   DATA_DIR,
   DEFAULT_PUSH,
   type ShareRow,
+  clearLinkPreviews,
+  countLinkPreviews,
+  listShares,
+  listUploads,
   deleteShare,
   getShare,
   getShareByChat,
@@ -70,7 +86,8 @@ import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simp
 import { PasskeyError, loginOptions, loginVerify, passwordLoginAllowed, registerVerify, registrationOptions } from './passkeys.ts'
 import { getNote, graph, listNotes, resolveLink, searchNotes, vaultFile, vaultInfo, watchVault } from './vault.ts'
 import { createJob, deleteJob, getJob, jobAction, jobRuns, listJobs, runOutput, updateJob } from './jobs.ts'
-import { CHAT_INSTRUCTIONS, mimeOf, sweepUploads } from './media.ts'
+import { mimeOf, sweepUploads } from './media.ts'
+import { chatInstructions, chatPrefs, updateChatPrefs } from './prefs.ts'
 import {
   NativeError,
   commandCatalog,
@@ -410,7 +427,7 @@ async function sendMessage(body: { chatId?: string; text?: string; attachments?:
       sessionId: chat.sessionId,
       input: await buildInput(text, attachments),
       idempotencyKey: assistant.id,
-      instructions: CHAT_INSTRUCTIONS,
+      instructions: chatInstructions(),
       model: chat.model,
     })
     assistant.status = 'running'
@@ -566,6 +583,74 @@ async function publicApi(req: IncomingMessage, res: ServerResponse, path: string
   }
   serveFile(req, res, u, url.searchParams.has('download'))
   return true
+}
+
+/** Видалити чат повністю: зупинити роботу Hermes, прибрати файли, сесію Hermes і посилання. */
+async function removeChat(chat: NonNullable<ReturnType<typeof getChat>>) {
+  for (const msg of listMessages(chat.id)) {
+    const l = liveMessage(msg.id)
+    if (!l?.runId || !['queued', 'running', 'stopping'].includes(l.status)) continue
+    if (chat.engine === 'native') await nativeStop(l.id).catch(() => {})
+    else await stopRun(l.runId).catch(() => {})
+  }
+  // Вкладення цього чату, які більше ніде не використовуються, видаляємо одразу.
+  const attached = new Set(listMessages(chat.id).flatMap((x) => x.attachments.map((a) => a.id)))
+  deleteChat(chat.id)
+  if (attached.size) sweepUploads(0, attached)
+  if (chat.engine === 'native') void nativeDelete(chat)
+  else void deleteSession(chat.sessionId)
+  emit({ type: 'chat-deleted', chatId: chat.id })
+}
+
+// ---------- Налаштування, дані, експорт ----------
+
+const STARTED_AT = Date.now()
+const VERSION = (() => {
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, timeout: 3000 }).toString().trim()
+  } catch {
+    return 'невідома'
+  }
+})()
+
+function storageInfo(): StorageInfo {
+  let files = 0
+  let bytes = 0
+  let macFiles = 0
+  for (const u of listUploads()) {
+    if (u.ref) {
+      macFiles++
+      continue
+    }
+    files++
+    bytes += u.size
+  }
+  let dbBytes = 0
+  for (const f of ['chat.db', 'chat.db-wal']) {
+    try {
+      dbBytes += statSync(join(DATA_DIR, f)).size
+    } catch {
+      /* немає файлу */
+    }
+  }
+  return { files, bytes, macFiles, linkCache: countLinkPreviews(), dbBytes }
+}
+
+/** Усі чати одним Markdown-файлом: заголовки, хто що сказав, назви файлів. */
+function exportMarkdown(): string {
+  const fmt = new Intl.DateTimeFormat('uk', { dateStyle: 'long', timeStyle: 'short' })
+  const out = [`# Чати з Hermes`, '', `Експорт від ${fmt.format(Date.now())}.`, '']
+  for (const chat of listChats()) {
+    out.push('---', '', `## ${chat.title || 'Без назви'}`, '', `_${fmt.format(chat.createdAt)}_`, '')
+    for (const m of listMessages(chat.id)) {
+      if (!m.text.trim() && !m.attachments.length) continue
+      out.push(`### ${m.role === 'user' ? 'Я' : 'Hermes'} · ${fmt.format(m.createdAt)}`, '')
+      if (m.text.trim()) out.push(m.text.trim(), '')
+      for (const a of m.attachments) out.push(`📎 ${a.name} (${Math.max(1, Math.round(a.size / 1024))} КБ)`)
+      if (m.attachments.length) out.push('')
+    }
+  }
+  return out.join('\n')
 }
 
 // ---------- Маршрути API ----------
@@ -790,6 +875,49 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
   if (path === '/api/messages' && method === 'POST') return send(res, 200, await sendMessage(await readJson(req)))
 
+  if (path === '/api/settings' && method === 'GET') {
+    const info: SettingsInfo = {
+      prefs: chatPrefs(),
+      about: { version: VERSION, startedAt: STARTED_AT, hermes: gateway.connected, vault: (await vaultInfo()).available },
+    }
+    return send(res, 200, info)
+  }
+  if (path === '/api/settings' && method === 'PATCH') {
+    return send(res, 200, updateChatPrefs(await readJson<Record<string, unknown>>(req)))
+  }
+  if (path === '/api/shares' && method === 'GET') {
+    const list: ShareListItem[] = listShares().map((x) => ({
+      chatId: x.chatId,
+      title: getChat(x.chatId)?.title || 'Без назви',
+      url: `${PUBLIC_ORIGIN}/s/${x.token}`,
+      updatedAt: x.updatedAt,
+    }))
+    return send(res, 200, list)
+  }
+  if (path === '/api/storage' && method === 'GET') return send(res, 200, storageInfo())
+  if (path === '/api/storage/link-cache' && method === 'DELETE') {
+    clearLinkPreviews()
+    return send(res, 200, storageInfo())
+  }
+  if (path === '/api/export' && method === 'GET') {
+    const name = `hermes-chats-${new Date().toISOString().slice(0, 10)}.md`
+    res.writeHead(200, {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${name}"`,
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    })
+    return void res.end(exportMarkdown())
+  }
+  // Видалити всі чати. Потрібне підтвердження словом, щоб випадковий запит нічого не стер.
+  if (path === '/api/chats/delete-all' && method === 'POST') {
+    const b = await readJson<{ confirm?: string }>(req)
+    if (b.confirm !== 'видалити') throw new HttpError(400, 'Потрібне підтвердження')
+    const all = listChats()
+    for (const c of all) await removeChat(c)
+    return send(res, 200, { deleted: all.length })
+  }
+
   // Посилання лише для перегляду: створити, оновити до поточного стану, видалити.
   const sh = path.match(/^\/api\/chats\/([\w-]+)\/share$/)
   if (sh) {
@@ -844,19 +972,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
       return send(res, 200, publicChat(getChat(chat.id)!))
     }
     if (method === 'DELETE') {
-      for (const msg of listMessages(chat.id)) {
-        const l = liveMessage(msg.id)
-        if (!l?.runId || !['queued', 'running', 'stopping'].includes(l.status)) continue
-        if (chat.engine === 'native') await nativeStop(l.id).catch(() => {})
-        else await stopRun(l.runId).catch(() => {})
-      }
-      // Вкладення цього чату, які більше ніде не використовуються, видаляємо одразу.
-      const attached = new Set(listMessages(chat.id).flatMap((x) => x.attachments.map((a) => a.id)))
-      deleteChat(chat.id)
-      if (attached.size) sweepUploads(0, attached)
-      if (chat.engine === 'native') void nativeDelete(chat)
-      else void deleteSession(chat.sessionId)
-      emit({ type: 'chat-deleted', chatId: chat.id })
+      await removeChat(chat)
       return send(res, 200, { ok: true })
     }
   }
