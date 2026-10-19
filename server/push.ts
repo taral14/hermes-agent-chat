@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import webpush from 'web-push'
 import type { Message, Part } from '../src/shared.ts'
 import { VAPID_SUBJECT } from './config.ts'
-import { DATA_DIR, type PushSub, deletePushSub, getChat, listPushSubs } from './db.ts'
+import { DATA_DIR, type PushSub, deletePushSub, getChat, getSetting, listPushSubs, setSetting } from './db.ts'
 
 const VAPID_FILE = join(DATA_DIR, '.vapid.json')
 
@@ -87,9 +87,20 @@ export function runFinished(m: Message) {
   void send('replies', { title, body, url: `/c/${m.chatId}`, tag: `chat-${m.chatId}` })
 }
 
+// ---------- Чати без сповіщень ----------
+
+const mutedList = (): string[] => JSON.parse(getSetting('muted_chats') ?? '[]') as string[]
+
+export const isMuted = (chatId: string) => mutedList().includes(chatId)
+
+export function setMuted(chatId: string, on: boolean) {
+  const rest = mutedList().filter((id) => id !== chatId && getChat(id))
+  setSetting('muted_chats', JSON.stringify(on ? [...rest, chatId] : rest))
+}
+
 /** Hermes сам написав у чат (розклад, send_message). Результати розкладу — під перемикачем «Задачі». */
 export function hermesDelivered(m: Message) {
-  if (watching(m.chatId)) return
+  if (watching(m.chatId) || isMuted(m.chatId)) return
   const d = m.parts.find((p) => p.type === 'delivered') as Extract<Part, { type: 'delivered' }> | undefined
   const chat = getChat(m.chatId)
   const title = d?.source === 'cron' && d.job ? `⏰ ${d.job}` : chat?.title || 'Hermes'

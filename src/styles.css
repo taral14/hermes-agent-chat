@@ -2938,6 +2938,166 @@ button.act-line:hover:not(:disabled) {
   }
 }
 
+/* ---------- Задача в чаті: смужка під заголовком і налаштування ---------- */
+
+.job-bar {
+  width: 100%;
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 0 16px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.job-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 8px 12px 8px 14px;
+  border-radius: 16px;
+  background: var(--bubble);
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.job-bar-item:hover {
+  background: var(--hover);
+}
+
+.job-bar-item > svg:first-child {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.job-bar-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.job-bar-text b {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.job-bar-item.is-paused .job-bar-text b {
+  color: var(--text-2);
+}
+
+.job-bar-muted,
+.job-bar-go {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.job-sheet {
+  width: min(520px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.job-sheet .sheet-head {
+  margin-bottom: 0;
+  gap: 12px;
+}
+
+.job-sheet .sheet-head h2 {
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.job-sheet .sheet-lead {
+  margin: 0;
+}
+
+.job-sheet .form-card {
+  margin: 0;
+}
+
+.job-sheet-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.job-sheet-actions .btn {
+  flex: 1;
+  gap: 7px;
+  min-height: 42px;
+}
+
+.job-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 16px;
+  border-radius: 20px;
+  background: var(--bubble);
+}
+
+.job-sheet-row > svg {
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.job-sheet-row > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.job-sheet-row b {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.job-sheet-row small {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.job-sheet-delete {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--danger);
+}
+
+.job-sheet-delete:hover {
+  background: var(--danger-bg);
+}
+
+.job-sheet-save {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -6px -6px;
+  padding: 10px 10px 10px 16px;
+  border-radius: 20px;
+  background: var(--menu);
+  box-shadow: var(--menu-shadow);
+}
+
+.job-sheet-save .save-hint {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---------- Вхід і безпека ---------- */
 
 .key-btn {

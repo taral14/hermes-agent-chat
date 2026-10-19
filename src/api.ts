@@ -47,7 +47,7 @@ export const api = {
   logout: () => req('POST', '/api/logout'),
   chats: () => req<Chat[]>('GET', '/api/chats'),
   chat: (id: string) => req<{ chat: Chat; messages: Message[] }>('GET', `/api/chats/${id}`),
-  patchChat: (id: string, patch: { title?: string; pinned?: boolean; model?: ModelChoice; mode?: ChatMode; listId?: string | null }) =>
+  patchChat: (id: string, patch: { title?: string; pinned?: boolean; model?: ModelChoice; mode?: ChatMode; listId?: string | null; muted?: boolean }) =>
     req<Chat>('PATCH', `/api/chats/${id}`, patch),
   deleteChat: (id: string) => req('DELETE', `/api/chats/${id}`),
   send: (body: { chatId?: string; text: string; attachments: string[]; model?: ModelChoice; mode?: ChatMode; listId?: string }) =>

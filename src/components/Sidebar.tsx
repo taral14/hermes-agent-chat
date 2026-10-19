@@ -2,7 +2,6 @@ import {
   AlarmClock,
   Pause,
   BookOpen,
-  CalendarClock,
   Check,
   ChevronRight,
   Folder,
@@ -42,8 +41,6 @@ type Props = {
   onNewInList: (listId: string) => void
   onClose: () => void
   onSettings: () => void
-  onJobs: () => void
-  jobsActive: boolean
   onKb: () => void
   kbActive: boolean
 }
@@ -471,12 +468,6 @@ export function Sidebar(p: Props) {
       <div className="chat-list">
         {!searching && (
           <div className="nav-block">
-            <button type="button" className={`nav-row ${p.jobsActive ? 'is-active' : ''}`} onClick={p.onJobs}>
-              <span className="nav-icon">
-                <CalendarClock size={p.narrow ? 24 : 18} />
-              </span>
-              <span>Розклад</span>
-            </button>
             <button type="button" className={`nav-row ${p.kbActive ? 'is-active' : ''}`} onClick={p.onKb}>
               <span className="nav-icon">
                 <BookOpen size={p.narrow ? 24 : 18} />

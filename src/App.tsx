@@ -5,6 +5,7 @@ import { Composer, type ComposerHandle, setDraft } from './components/Composer.t
 import { type KbRoute, KbView } from './components/Kb.tsx'
 import { invalidateNoteIndex, kb, notePath, obsidianUriToPath } from './kb.ts'
 import { JobsView, type JobsRoute } from './components/Jobs.tsx'
+import { JobBar, JobSheet } from './components/JobSheet.tsx'
 import { Login } from './components/Login.tsx'
 import { Notifications } from './components/Notifications.tsx'
 import { Security } from './components/Security.tsx'
@@ -91,6 +92,8 @@ export default function App() {
   const [notif, setNotif] = useState(false)
   const [security, setSecurity] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [jobSheet, setJobSheet] = useState<string | null>(null)
+  const closeJobSheet = useCallback(() => setJobSheet(null), [])
   const [settingsOpen, setSettingsOpen] = useState(false)
   /** Спільні налаштування: режим і модель, з якими стартують нові чати. */
   const defaults = useRef<ChatPrefs | null>(null)
@@ -243,6 +246,13 @@ export default function App() {
       window.removeEventListener('chat:kbnote', onNote)
     }
   }, [goKb])
+
+  // Задача за розкладом (смужка в чаті, плашка над результатом, чипи) — налаштування поверх чату.
+  useEffect(() => {
+    const on = (e: Event) => setJobSheet((e as CustomEvent<string>).detail)
+    window.addEventListener('chat:job', on)
+    return () => window.removeEventListener('chat:job', on)
+  }, [])
 
   useEffect(() => {
     const onPop = () => {
@@ -490,8 +500,6 @@ export default function App() {
             username={username}
             onSelect={(id) => navigate(id)}
             onNew={newChat}
-            jobsActive={Boolean(jobsRoute)}
-            onJobs={() => goJobs({ kind: 'list' })}
             onKb={() => goKb({ kind: 'home' })}
             kbActive={Boolean(kbRoute)}
             onSettings={() => {
@@ -578,6 +586,7 @@ export default function App() {
         ) : (
           <>
         {header}
+        {current?.jobs?.length ? <JobBar chat={current} /> : null}
         {empty ? (
           <div className="welcome">
             {!currentId && newListId && lists.find((l) => l.id === newListId) && (
@@ -640,6 +649,10 @@ export default function App() {
             models={models}
             onClose={() => setSettingsOpen(false)}
             onNotifications={() => setNotif(true)}
+            onJobs={() => {
+              setSettingsOpen(false)
+              goJobs({ kind: 'list' })
+            }}
             onSecurity={() => setSecurity(true)}
             onLogout={() => {
               setSettingsOpen(false)
@@ -662,6 +675,9 @@ export default function App() {
         {notif && <Notifications onClose={() => setNotif(false)} />}
         {security && <Security onClose={() => setSecurity(false)} />}
         {sharing && current && <ShareSheet chat={current} onClose={() => setSharing(false)} />}
+        {jobSheet && (
+          <JobSheet id={jobSheet} chat={chats.find((c) => c.jobs?.some((j) => j.id === jobSheet)) ?? null} onClose={closeJobSheet} flash={flash} />
+        )}
       </main>
     </div>
   )

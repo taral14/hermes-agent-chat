@@ -38,7 +38,7 @@ export function refreshJobLinks(): Promise<string[]> {
     for (const j of jobs) {
       if (finished(j)) continue
       for (const chatId of chatsOf(j.deliver)) {
-        const brief: ChatJob = { id: j.id, name: j.name || j.id, enabled: j.enabled, schedule: j.schedule_display || j.schedule?.display || '', nextRunAt: j.next_run_at }
+        const brief: ChatJob = { id: j.id, name: j.name || j.id, enabled: j.enabled, schedule: j.schedule_display || j.schedule?.display || '', spec: j.schedule, nextRunAt: j.next_run_at }
         next.set(chatId, [...(next.get(chatId) ?? []), brief])
         nextJob.set(j.id, chatId)
       }

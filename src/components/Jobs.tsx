@@ -58,7 +58,7 @@ function useTick(ms = 30_000) {
   return now
 }
 
-function Switch({ on, busy, onChange, label }: { on: boolean; busy?: boolean; onChange: (v: boolean) => void; label: string }) {
+export function Switch({ on, busy, onChange, label }: { on: boolean; busy?: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
       type="button"
@@ -384,7 +384,7 @@ function JobsList({ go, sidebarOpen, openSidebar, flash }: Props) {
 
 // ---------- Редактор розкладу ----------
 
-function ScheduleEditor({ value, onChange }: { value: Draft; onChange: (d: Draft) => void }) {
+export function ScheduleEditor({ value, onChange }: { value: Draft; onChange: (d: Draft) => void }) {
   const time = 'time' in value ? value.time : '09:00'
   const switchMode = (mode: Draft['mode']) => {
     if (mode === value.mode) return

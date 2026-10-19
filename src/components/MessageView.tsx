@@ -36,6 +36,7 @@ import { fileKind, formatSize } from '../fileKind.ts'
 import { AudioPlayer } from './AudioPlayer.tsx'
 import { usePrefs } from '../prefs.ts'
 import { AnswerLinks, LinkPreviews, LinkText } from './Links.tsx'
+import { openJob } from './JobSheet.tsx'
 import { CopyButton, Markdown } from './Markdown.tsx'
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
@@ -657,7 +658,16 @@ function DeliveredBadge({ d }: { d: Extract<Part, { type: 'delivered' }> }) {
   }
   const href = d.jobId ? `/jobs/${d.jobId}` : '/jobs'
   return (
-    <a className="msg-delivered is-job" href={href} onClick={(e) => go(e, href)}>
+    <a
+      className="msg-delivered is-job"
+      href={href}
+      onClick={(e) => {
+        if (!d.jobId) return go(e, href)
+        if (e.metaKey || e.ctrlKey) return
+        e.preventDefault()
+        openJob(d.jobId)
+      }}
+    >
       <span>{d.job || 'Задача за розкладом'}</span>
       <ChevronRight size={16} />
     </a>
@@ -713,7 +723,16 @@ function JobChips({ parts }: { parts: Part[] }) {
             {body}
           </span>
         ) : (
-          <a key={j.id} className="job-chip" href={`/jobs/${j.id}`} onClick={(e) => go(e, `/jobs/${j.id}`)}>
+          <a
+            key={j.id}
+            className="job-chip"
+            href={`/jobs/${j.id}`}
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey) return
+              e.preventDefault()
+              openJob(j.id)
+            }}
+          >
             {body}
           </a>
         )

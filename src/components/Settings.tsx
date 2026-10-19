@@ -1,6 +1,7 @@
 import {
   Bell,
   Bot,
+  CalendarClock,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -256,7 +257,7 @@ function Chats({ prefs, models, onChange }: { prefs: ChatPrefs; models: ModelOpt
 
 // ---------- Hermes ----------
 
-function Hermes({ info, models }: { info: SettingsInfo | null; models: ModelOptions | null }) {
+function Hermes({ info, models, onJobs }: { info: SettingsInfo | null; models: ModelOptions | null; onJobs: () => void }) {
   const dot = (ok: boolean | undefined) => <span className={`status-dot ${ok ? 'is-ok' : ok === false ? 'is-bad' : ''}`} />
   return (
     <>
@@ -285,6 +286,9 @@ function Hermes({ info, models }: { info: SettingsInfo | null; models: ModelOpti
             {!info ? '…' : info.about.vault ? 'Підключена' : 'Недоступна'}
           </span>
         </div>
+      </Group>
+      <Group foot="Задачі зазвичай живуть у своїх чатах. Тут — усі разом, зокрема ті, що пишуть у Telegram, і службові скрипти.">
+        <NavRow Icon={CalendarClock} title="Усі задачі за розкладом" onClick={onJobs} />
       </Group>
       {info?.about.panelUrl && (
         <Group foot="Сесії, навички, пам’ять і повні налаштування Hermes.">
@@ -493,6 +497,7 @@ type Props = {
   models: ModelOptions | null
   onClose: () => void
   onNotifications: () => void
+  onJobs: () => void
   onSecurity: () => void
   onLogout: () => void
   /** Змінились спільні налаштування (режим, модель нових чатів). */
@@ -537,7 +542,7 @@ export function Settings(p: Props) {
       case 'chats':
         return info ? <Chats prefs={info.prefs} models={p.models} onChange={change} /> : <Loader2 size={22} className="spin set-loading" />
       case 'hermes':
-        return <Hermes info={info} models={p.models} />
+        return <Hermes info={info} models={p.models} onJobs={p.onJobs} />
       case 'account':
         return <Account username={p.username} onNotifications={p.onNotifications} onSecurity={p.onSecurity} onLogout={p.onLogout} />
       case 'data':

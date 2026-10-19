@@ -101,13 +101,15 @@ export type Chat = {
   listId?: string | null
   /** Задачі за розкладом, що доставляють результати в цей чат (deliver=webchat:<чат>). */
   jobs?: ChatJob[]
+  /** Пуші про те, що Hermes сам написав у цей чат (результати задач), вимкнені. */
+  muted?: boolean
 }
 
 /** Чат, у який пишуть задачі за розкладом, для сторінки «Розклад». */
 export type JobChatInfo = { id: string; title: string; updatedAt: number; last: { text: string; at: number; job?: string } | null }
 
 /** Задача за розкладом, прив'язана до чату. */
-export type ChatJob = { id: string; name: string; enabled: boolean; schedule: string; nextRunAt: string | null }
+export type ChatJob = { id: string; name: string; enabled: boolean; schedule: string; spec?: JobSchedule; nextRunAt: string | null }
 
 /** Список чатів (як проєкти в ChatGPT). */
 export type ChatList = { id: string; name: string; color: string; position: number }

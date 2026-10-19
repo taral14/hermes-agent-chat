@@ -109,7 +109,7 @@ import {
   onCronChanged,
 } from './native.ts'
 import { gateway } from './gateway.ts'
-import { VAPID_PUBLIC, hermesDelivered, sendTest, setPresence } from './push.ts'
+import { VAPID_PUBLIC, hermesDelivered, isMuted, sendTest, setMuted, setPresence } from './push.ts'
 import { hookTokenOk, newJobChat, receiveFromHermes } from './inbox.ts'
 import { chatForJob, jobsForChat, linkedChats, refreshJobLinks } from './jobLinks.ts'
 import {
@@ -524,7 +524,7 @@ function serveDownloadLink(req: IncomingMessage, res: ServerResponse, token: str
 /** Чат для клієнта: разом із задачами за розкладом, що доставляють у нього результати. */
 function publicChat(c: Parameters<typeof rawPublicChat>[0]) {
   const jobs = jobsForChat(c.id)
-  return { ...rawPublicChat(c), ...(jobs.length ? { jobs } : {}) }
+  return { ...rawPublicChat(c), ...(jobs.length ? { jobs } : {}), ...(isMuted(c.id) ? { muted: true } : {}) }
 }
 
 /** Перечитати прив'язку задач і оновити в клієнтів чати, де вона змінилась. */
@@ -1031,7 +1031,8 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
       })
     }
     if (method === 'PATCH') {
-      const b = await readJson<{ title?: string; pinned?: boolean; model?: ModelChoice; mode?: string; listId?: string | null }>(req)
+      const b = await readJson<{ title?: string; pinned?: boolean; model?: ModelChoice; mode?: string; listId?: string | null; muted?: boolean }>(req)
+      if (typeof b.muted === 'boolean') setMuted(chat.id, b.muted)
       if (typeof b.title === 'string' && b.title.trim()) {
         const title = b.title.trim().slice(0, 120)
         updateChat(chat.id, { title, titleSource: 'user' })
