@@ -643,28 +643,6 @@ a {
   display: none;
 }
 
-.suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 20px;
-  max-width: 768px;
-}
-
-.suggestion {
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  font-size: 14px;
-  color: var(--text-2);
-}
-
-.suggestion:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-
 /* ---------- Стрічка повідомлень ---------- */
 
 .thread {
@@ -3776,10 +3754,6 @@ button.act-line:hover:not(:disabled) {
 
   .welcome-title {
     font-size: 28px;
-  }
-
-  .suggestion {
-    font-size: 15px;
   }
 }
 

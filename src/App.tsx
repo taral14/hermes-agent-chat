@@ -39,13 +39,6 @@ const kbPath = (r: KbRoute) =>
 const jobsPath = (r: JobsRoute) => (r.kind === 'list' ? '/jobs' : r.kind === 'new' ? '/jobs/new' : `/jobs/${r.id}`)
 const isNarrow = () => matchMedia('(max-width: 768px)').matches
 
-const SUGGESTIONS = [
-  'Зроби ресерч і порівняй варіанти',
-  'Що нового в моїх проєктах у ~/Projects/web?',
-  'Нагадай мені завтра о 10:00',
-  'Підсумуй цей PDF',
-]
-
 function sortChats(list: Chat[]) {
   return [...list].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
 }
@@ -597,15 +590,6 @@ export default function App() {
             )}
             <h1 className="welcome-title">{list ? 'Чим можу допомогти?' : currentId ? '' : 'Чим можу допомогти?'}</h1>
             {composerEl}
-            {!currentId && (
-              <div className="suggestions">
-                {SUGGESTIONS.map((s) => (
-                  <button key={s} type="button" className="suggestion" onClick={() => void send(s, [])}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         ) : (
           <>
