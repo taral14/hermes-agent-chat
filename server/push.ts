@@ -152,11 +152,16 @@ async function pollJobs() {
     lastSeen.set(j.id, j.last_run_at)
     if (!primed || j.no_agent || !j.last_run_at || prev === j.last_run_at) continue
     const failed = j.last_status && !/^(ok|success|completed|skipped)$/i.test(j.last_status)
+    // Успішний результат у веб-чат приносить сам Hermes (hermesDelivered) — другий пуш не потрібен.
+    if (!failed && /(^|,)\s*webchat\b/.test(j.deliver ?? '')) continue
     let body = failed ? `⚠️ ${j.last_error ?? 'Помилка'}` : 'Виконано'
     if (!failed) {
       try {
         const [run] = await jobRuns(j.id, 1)
-        if (run) body = plain(await runOutput(run.sessionId)) || body
+        const out = run ? await runOutput(run.sessionId) : ''
+        // [SILENT] — задача вирішила нічого не повідомляти, Hermes теж нічого не доставляє.
+        if (/^\s*\[SILENT\]/i.test(out)) continue
+        body = plain(out) || body
       } catch {
         /* без тексту */
       }
