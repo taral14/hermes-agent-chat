@@ -5987,6 +5987,24 @@ button.act-line:hover:not(:disabled) {
   gap: 6px;
 }
 
+.group-toggle {
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.group-toggle:hover {
+  color: var(--text-2);
+}
+
+.group-toggle > span:nth-of-type(1) {
+  flex: 1;
+}
+
+.group-count {
+  font-variant-numeric: tabular-nums;
+}
+
 .chat-job-state {
   display: inline-grid;
   place-items: center;

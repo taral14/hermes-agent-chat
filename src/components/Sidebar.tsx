@@ -263,6 +263,8 @@ function ChatItem({ chat, active, narrow, lists, indent, onSelect, onRename, onP
 // ---------- Список ----------
 
 const CLOSED_KEY = 'chat-lists-closed'
+/** Група «Задачі» згортається так само, як списки, і її стан лежить поруч. */
+const TASKS_GROUP = 'tasks'
 function readClosed(): Set<string> {
   try {
     return new Set(JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]') as string[])
@@ -370,6 +372,7 @@ export function Sidebar(p: Props) {
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [closedLists, setClosedLists] = useState(readClosed)
+  const tasksClosed = closedLists.has(TASKS_GROUP)
   const [newList, setNewList] = useState<string | null>(null)
 
   const toggleList = (id: string) =>
@@ -486,11 +489,19 @@ export function Sidebar(p: Props) {
 
         {!q && taskChats.length > 0 && (
           <div className="chat-group">
-            <div className="chat-group-title group-with-icon">
+            <button
+              type="button"
+              className="chat-group-title group-with-icon group-toggle"
+              aria-expanded={!tasksClosed}
+              onClick={() => toggleList(TASKS_GROUP)}
+            >
               <AlarmClock size={p.narrow ? 16 : 13} />
               <span>Задачі</span>
-            </div>
-            {taskChats.map((c) => item(c))}
+              {tasksClosed && <span className="group-count">{taskChats.length}</span>}
+              <ChevronRight size={p.narrow ? 16 : 13} className={`list-chevron ${tasksClosed ? '' : 'is-open'}`} />
+            </button>
+            {/* Згорнута група лишає видимим відкритий зараз чат задачі. */}
+            {(tasksClosed ? taskChats.filter((c) => c.id === p.currentId) : taskChats).map((c) => item(c))}
           </div>
         )}
 
