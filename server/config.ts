@@ -29,7 +29,7 @@ export const HERMES_URL = (env('HERMES_URL') ?? 'http://127.0.0.1:8642').replace
 export const HERMES_PANEL_URL = env('HERMES_PANEL_URL') ?? ''
 
 /**
- * Роутер, що запускає чат на вимогу й зупиняє після простою (як у монорепо web).
+ * Необов’язковий роутер, що запускає чат на вимогу й зупиняє після простою.
  * Якщо задано, поки Hermes працює, чат раз на 5 хвилин стукає до себе через нього, щоб його не зупинили.
  */
 export const ROUTER_URL = (env('ROUTER_URL') ?? '').replace(/\/+$/, '')
