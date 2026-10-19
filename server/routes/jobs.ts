@@ -2,7 +2,7 @@
 import type { Job, JobChatInfo, Part } from '../../src/shared.ts'
 import { deleteChat, getChat, listMessages } from '../db.ts'
 import { emitChat } from '../events.ts'
-import { HermesError } from '../hermes.ts'
+import { HermesError, hermesTimezone } from '../hermes.ts'
 import { type Ctx, HttpError, readJson, send } from '../http.ts'
 import { newJobChat } from '../inbox.ts'
 import { chatForJob, linkedChats, refreshJobLinks } from '../jobLinks.ts'
@@ -64,6 +64,10 @@ export async function jobRoutes({ req, res, path, method }: Ctx): Promise<boolea
   if (!path.startsWith('/api/jobs')) return false
   try {
     if (path === '/api/jobs' && method === 'GET') return send(res, 200, (await listJobs()).map(withChat))
+    if (path === '/api/jobs/meta' && method === 'GET') {
+      const tz = hermesTimezone()
+      return send(res, 200, { timezone: tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone, configured: Boolean(tz) })
+    }
     if (path === '/api/jobs/chats' && method === 'GET') {
       await refreshJobLinks()
       return send(res, 200, jobChats())

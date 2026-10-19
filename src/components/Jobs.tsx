@@ -1,15 +1,12 @@
 import {
-  MessageSquare,
-  MessageSquarePlus,
   AlertTriangle,
   CalendarClock,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   FileCode2,
   Loader2,
-  Menu,
-  PanelLeftOpen,
+  MessageSquare,
+  MessageSquarePlus,
   Pause,
   Play,
   Plus,
@@ -20,24 +17,16 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../api.ts'
-import {
-  DAYS,
-  type Draft,
-  MODES,
-  STATUS_LABEL,
-  deliverLabel,
-  describeDraft,
-  describeSchedule,
-  draftValid,
-  duration,
-  fromDraft,
-  jobStatus,
-  nextRun,
-  relative,
-  toDraft,
-} from '../schedule.ts'
+import { useAutosize } from '../hooks/useAutosize.ts'
+import { useJobForm } from '../hooks/useJobForm.ts'
+import { useTick } from '../hooks/useTick.ts'
+import { navigateTo } from '../router.ts'
+import { STATUS_LABEL, deliverLabel, describeSchedule, duration, jobStatus, nextRun, plural, relative } from '../schedule.ts'
 import type { Job, JobChatInfo, JobRun } from '../shared.ts'
 import { Markdown } from './Markdown.tsx'
+import { ScheduleEditor } from './ScheduleEditor.tsx'
+import { Switch } from './ui/Switch.tsx'
+import { TopBar } from './ui/TopBar.tsx'
 
 export type JobsRoute = { kind: 'list' } | { kind: 'job'; id: string } | { kind: 'new' }
 
@@ -49,79 +38,18 @@ type Props = {
   flash: (e: unknown) => void
 }
 
-function useTick(ms = 30_000) {
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), ms)
-    return () => clearInterval(t)
-  }, [ms])
-  return now
-}
-
-export function Switch({ on, busy, onChange, label }: { on: boolean; busy?: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      className={`switch ${on ? 'is-on' : ''} ${busy ? 'is-busy' : ''}`}
-      onClick={(e) => {
-        e.stopPropagation()
-        if (!busy) onChange(!on)
-      }}
-    >
-      <span className="switch-knob" />
-    </button>
-  )
-}
-
 function StatusPill({ job }: { job: Job }) {
   const s = jobStatus(job)
   return <span className={`pill pill-${s}`}>{STATUS_LABEL[s]}</span>
 }
 
-export function TopBar({ title, back, right, sidebarOpen, openSidebar }: {
-  title: string
-  back?: () => void
-  right?: ReactNode
-  sidebarOpen: boolean
-  openSidebar: () => void
-}) {
-  return (
-    <header className="topbar jobs-topbar">
-      <div className="topbar-left">
-        {back ? (
-          <button type="button" className="icon-btn" onClick={back} aria-label="Назад">
-            <ChevronLeft size={22} />
-          </button>
-        ) : (
-          !sidebarOpen && (
-            <button type="button" className="icon-btn" onClick={openSidebar} aria-label="Показати панель">
-              <span className="only-wide">
-                <PanelLeftOpen size={20} />
-              </span>
-              <span className="only-narrow">
-                <Menu size={20} />
-              </span>
-            </button>
-          )
-        )}
-        <span className="jobs-topbar-title">{title}</span>
-      </div>
-      {right}
-    </header>
-  )
-}
-
 // ---------- Список ----------
 
-/** Перейти в чат застосунку без перезавантаження сторінки. */
+/** Перейти в чат застосунку без перезавантаження сторінки (cmd/ctrl-клік — у новій вкладці). */
 function openChat(e: React.MouseEvent, chatId: string) {
   if (e.metaKey || e.ctrlKey) return
   e.preventDefault()
-  history.pushState(null, '', `/c/${chatId}`)
-  window.dispatchEvent(new PopStateEvent('popstate'))
+  navigateTo(`/c/${chatId}`)
 }
 
 function JobRow({ job, now, onOpen, onToggle, extra }: { job: Job; now: number; onOpen: () => void; onToggle: (on: boolean) => Promise<void>; extra?: ReactNode }) {
@@ -132,7 +60,9 @@ function JobRow({ job, now, onOpen, onToggle, extra }: { job: Job; now: number; 
   const when =
     status === 'done' ? `виконано ${relative(job.last_run_at, now)}` : status === 'paused' ? 'на паузі' : nextRun(job.next_run_at, now)
   return (
-    <div className={`job-row is-${status}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
+    <div className={`job-row is-${status}`}>
+      {/* Увесь рядок відкриває задачу (::after кнопки), а перемикач і «У чат» — окремі кнопки поверх. */}
+      <button type="button" className="job-row-open" onClick={onOpen}>
       <span className="job-row-icon">
         {status === 'error' ? <AlertTriangle size={16} /> : job.no_agent ? <FileCode2 size={16} /> : job.schedule.kind === 'once' ? <CalendarClock size={16} /> : <Repeat size={16} />}
       </span>
@@ -149,6 +79,7 @@ function JobRow({ job, now, onOpen, onToggle, extra }: { job: Job; now: number; 
           )}
         </span>
       </span>
+      </button>
       {extra}
       {toggleable && (
         <Switch
@@ -382,99 +313,6 @@ function JobsList({ go, sidebarOpen, openSidebar, flash }: Props) {
   )
 }
 
-// ---------- Редактор розкладу ----------
-
-export function ScheduleEditor({ value, onChange }: { value: Draft; onChange: (d: Draft) => void }) {
-  const time = 'time' in value ? value.time : '09:00'
-  const switchMode = (mode: Draft['mode']) => {
-    if (mode === value.mode) return
-    if (mode === 'daily' || mode === 'weekdays') onChange({ mode, time })
-    else if (mode === 'days') onChange({ mode, time, days: [0] })
-    else if (mode === 'interval') onChange({ mode, every: 1, unit: 'h' })
-    else if (mode === 'once') {
-      const d = new Date(Date.now() + 3600_000)
-      d.setMinutes(0, 0, 0)
-      const p = (n: number) => String(n).padStart(2, '0')
-      onChange({ mode, at: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:00` })
-    } else onChange({ mode: 'cron', expr: fromDraft(value) })
-  }
-  return (
-    <div className="sched">
-      <div className="seg-scroll">
-        <div className="seg seg-modes">
-          {MODES.map((m) => (
-            <button key={m.mode} type="button" className={value.mode === m.mode ? 'is-on' : ''} onClick={() => switchMode(m.mode)}>
-              {m.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      {value.mode === 'days' && (
-        <div className="day-row">
-          {DAYS.map((d, i) => (
-            <button
-              key={d}
-              type="button"
-              className={`day ${value.days.includes(i) ? 'is-on' : ''}`}
-              onClick={() =>
-                onChange({ ...value, days: value.days.includes(i) ? value.days.filter((x) => x !== i) : [...value.days, i].sort() })
-              }
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-      )}
-      {'time' in value && (
-        <label className="field-inline">
-          <span>Час</span>
-          <input type="time" value={value.time} onChange={(e) => onChange({ ...value, time: e.target.value })} />
-        </label>
-      )}
-      {value.mode === 'interval' && (
-        <div className="field-inline">
-          <span>Кожні</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            value={Number.isFinite(value.every) ? value.every : ''}
-            onChange={(e) => onChange({ ...value, every: Number(e.target.value) })}
-          />
-          <div className="seg seg-small">
-            {(
-              [
-                ['m', 'хв'],
-                ['h', 'год'],
-                ['d', 'дн'],
-              ] as const
-            ).map(([u, l]) => (
-              <button key={u} type="button" className={value.unit === u ? 'is-on' : ''} onClick={() => onChange({ ...value, unit: u })}>
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {value.mode === 'once' && (
-        <label className="field-inline">
-          <span>Коли</span>
-          <input type="datetime-local" value={value.at} onChange={(e) => onChange({ ...value, at: e.target.value })} />
-        </label>
-      )}
-      {value.mode === 'cron' && (
-        <label className="field-inline">
-          <span>Вираз</span>
-          <input className="mono" value={value.expr} placeholder="0 9 * * 1-5" onChange={(e) => onChange({ ...value, expr: e.target.value })} autoCapitalize="off" autoCorrect="off" spellCheck={false} />
-        </label>
-      )}
-      <div className={`sched-preview ${draftValid(value) ? 'is-bad' : ''}`}>
-        <Repeat size={14} /> {describeDraft(value)}
-      </div>
-    </div>
-  )
-}
-
 // ---------- Задача ----------
 
 function RunRow({ run, now }: { run: JobRun; now: number }) {
@@ -496,7 +334,7 @@ function RunRow({ run, now }: { run: JobRun; now: number }) {
         <span className="run-when">{relative(run.startedAt, now)}</span>
         <span className="run-meta">
           {run.endedAt ? duration(run.endedAt - run.startedAt) : 'виконується'}
-          {run.tools ? ` · ${run.tools} ${run.tools === 1 ? 'дія' : run.tools < 5 ? 'дії' : 'дій'}` : ''}
+          {run.tools ? ` · ${run.tools} ${plural(run.tools, 'дія', 'дії', 'дій')}` : ''}
         </span>
         <ChevronDown size={16} className="run-chevron" />
       </button>
@@ -517,133 +355,48 @@ function RunRow({ run, now }: { run: JobRun; now: number }) {
   )
 }
 
-type Form = { name: string; prompt: string; draft: Draft; deliver: string; repeat: number | null }
-
-function formOf(job: Job | null): Form {
-  return {
-    name: job?.name ?? '',
-    prompt: job?.prompt ?? '',
-    draft: toDraft(job?.schedule),
-    deliver: job?.deliver ?? 'webchat:new',
-    repeat: job?.repeat.times ?? null,
-  }
-}
-
 function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
   const id = route.kind === 'job' ? route.id : null
-  const [job, setJob] = useState<Job | null>(null)
-  const [form, setForm] = useState<Form>(() => formOf(null))
-  const [saved, setSaved] = useState<Form>(() => formOf(null))
+  const toList = useCallback(() => go({ kind: 'list' }), [go])
+  const { job, form, setForm, reset, dirty, invalid, busy, notice, show, save, act, remove } = useJobForm(id, { flash, onMissing: toList })
   const [runs, setRuns] = useState<JobRun[] | null>(null)
   const [chats, setChats] = useState<JobChatInfo[]>([])
-  const [busy, setBusy] = useState<string>('')
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [notice, setNotice] = useState('')
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
   const now = useTick()
+  useAutosize(area, form.prompt, 360)
 
+  // Чати з задачами: щоб показати «Чат «назва»» серед варіантів доставки. Перечитуємо, коли зв'язок змінився.
   useEffect(() => {
     api.jobChats().then(setChats).catch(() => {})
-    if (!id) return
-    // Спершу чати: цей запит оновлює на сервері зв'язки задач із чатами, тож chatId задачі буде свіжим.
-    api
-      .jobChats()
-      .catch(() => [] as JobChatInfo[])
-      .then((c) => {
-        setChats(c)
-        return api.job(id)
-      })
-      .then((j) => {
-        setJob(j)
-        setForm(formOf(j))
-        setSaved(formOf(j))
-      })
-      .catch((e) => {
-        flash(e)
-        go({ kind: 'list' })
-      })
-    api.jobRuns(id).then(setRuns).catch(() => setRuns([]))
-  }, [id, flash, go])
+  }, [job?.chatId])
+  const loadRuns = useCallback(() => {
+    if (id) api.jobRuns(id).then(setRuns).catch(() => setRuns([]))
+  }, [id])
+  useEffect(loadRuns, [loadRuns])
 
-  useEffect(() => {
-    const el = area.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 360)}px`
-  }, [form.prompt])
-
-  const dirty = JSON.stringify(form) !== JSON.stringify(saved)
-  const invalid = !form.name.trim() ? 'Дай задачі назву' : !form.prompt.trim() && !job?.no_agent ? 'Опиши, що зробити' : draftValid(form.draft)
   const status = job ? jobStatus(job) : 'active'
+  /** Назад до списку; незбережені зміни — спершу спитати. */
+  const back = () => (dirty ? setConfirmLeave(true) : toList())
 
-  const save = async () => {
-    if (invalid) return
-    setBusy('save')
-    try {
-      const body = { name: form.name.trim(), prompt: form.prompt.trim(), schedule: fromDraft(form.draft), deliver: form.deliver, repeat: form.repeat }
-      if (!job) {
-        const created = await api.createJob({ ...body, repeat: body.repeat ?? undefined })
-        go({ kind: 'job', id: created.id })
-        return
-      }
-      const patch: Record<string, unknown> = {}
-      if (form.name !== saved.name) patch.name = body.name
-      if (form.prompt !== saved.prompt) patch.prompt = body.prompt
-      if (JSON.stringify(form.draft) !== JSON.stringify(saved.draft)) patch.schedule = body.schedule
-      if (form.deliver !== saved.deliver) patch.deliver = body.deliver
-      if (form.repeat !== saved.repeat) patch.repeat = body.repeat
-      let updated = await api.updateJob(job.id, patch)
-      if (patch.deliver) {
-        // Новий чат чи інше місце: перечитати зв'язок задачі з чатом.
-        setChats(await api.jobChats())
-        updated = await api.job(job.id)
-      }
-      setJob(updated)
-      setForm(formOf(updated))
-      setSaved(formOf(updated))
-      setNotice('Збережено')
-      setTimeout(() => setNotice(''), 2000)
-    } catch (e) {
-      flash(e)
-    } finally {
-      setBusy('')
-    }
+  const onSave = async () => {
+    const r = await save()
+    if (r && !job) go({ kind: 'job', id: r.id })
   }
-
-  const act = async (action: 'pause' | 'resume' | 'run') => {
-    if (!job) return
-    setBusy(action)
-    try {
-      const updated = await api.jobAction(job.id, action)
-      setJob({ ...job, ...updated })
-      if (action === 'run') {
-        setNotice('Запущено — результат прийде туди, куди надсилається задача')
-        setTimeout(() => setNotice(''), 4000)
-        setTimeout(() => api.jobRuns(job.id).then(setRuns).catch(() => {}), 4000)
-      }
-    } catch (e) {
-      flash(e)
-    } finally {
-      setBusy('')
-    }
+  const onAct = async (action: 'pause' | 'resume' | 'run') => {
+    if (!(await act(action)) || action !== 'run') return
+    show('Запущено — результат прийде туди, куди надсилається задача', 4000)
+    setTimeout(loadRuns, 4000)
   }
-
-  const remove = async () => {
-    if (!job) return
-    setBusy('delete')
-    try {
-      await api.deleteJob(job.id)
-      go({ kind: 'list' })
-    } catch (e) {
-      flash(e)
-      setBusy('')
-    }
+  const onRemove = async () => {
+    if (await remove()) toList()
   }
 
   if (id && !job) {
     return (
       <>
-        <TopBar title="Задача" back={() => go({ kind: 'list' })} sidebarOpen={sidebarOpen} openSidebar={openSidebar} />
+        <TopBar title="Задача" back={toList} sidebarOpen={sidebarOpen} openSidebar={openSidebar} />
         <div className="jobs-loading">
           <Loader2 size={22} className="spin" />
         </div>
@@ -663,7 +416,7 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
 
   return (
     <>
-      <TopBar title={job ? 'Задача' : 'Нова задача'} back={() => go({ kind: 'list' })} sidebarOpen={sidebarOpen} openSidebar={openSidebar} />
+      <TopBar title={job ? 'Задача' : 'Нова задача'} back={back} sidebarOpen={sidebarOpen} openSidebar={openSidebar} />
       <div className="jobs-scroll">
         <div className="jobs-inner job-page">
           {job && (
@@ -689,12 +442,12 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
                 )}
               </div>
               <div className="job-actions">
-                <button type="button" className="job-action" disabled={!!busy} onClick={() => void act('run')}>
+                <button type="button" className="job-action" disabled={!!busy} onClick={() => void onAct('run')}>
                   <span>{busy === 'run' ? <Loader2 size={20} className="spin" /> : <Zap size={20} />}</span>
                   Запустити
                 </button>
                 {status !== 'done' && (
-                  <button type="button" className="job-action" disabled={!!busy} onClick={() => void act(status === 'paused' ? 'resume' : 'pause')}>
+                  <button type="button" className="job-action" disabled={!!busy} onClick={() => void onAct(status === 'paused' ? 'resume' : 'pause')}>
                     <span>{status === 'paused' ? <Play size={20} /> : <Pause size={20} />}</span>
                     {status === 'paused' ? 'Продовжити' : 'Пауза'}
                   </button>
@@ -703,12 +456,7 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
                   <a
                     className="job-action"
                     href={`/c/${job.chatId}`}
-                    onClick={(e) => {
-                      if (e.metaKey || e.ctrlKey) return
-                      e.preventDefault()
-                      history.pushState(null, '', `/c/${job.chatId}`)
-                      window.dispatchEvent(new PopStateEvent('popstate'))
-                    }}
+                    onClick={(e) => openChat(e, job.chatId!)}
                   >
                     <span>
                       <MessageSquare size={20} />
@@ -730,7 +478,7 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
                     <button type="button" className="btn" onClick={() => setConfirmDelete(false)}>
                       Скасувати
                     </button>
-                    <button type="button" className="btn btn-danger-solid" disabled={busy === 'delete'} onClick={() => void remove()}>
+                    <button type="button" className="btn btn-danger-solid" disabled={busy === 'delete'} onClick={() => void onRemove()}>
                       {busy === 'delete' ? <Loader2 size={16} className="spin" /> : 'Видалити'}
                     </button>
                   </div>
@@ -774,7 +522,7 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
             </span>
             <div className="seg seg-wide">
               {deliverOptions.map((o) => (
-                <button key={o.v} type="button" className={form.deliver === o.v ? 'is-on' : ''} onClick={() => setForm({ ...form, deliver: o.v })}>
+                <button key={o.v} type="button" aria-pressed={form.deliver === o.v} className={form.deliver === o.v ? 'is-on' : ''} onClick={() => setForm({ ...form, deliver: o.v })}>
                   {o.label}
                 </button>
               ))}
@@ -789,10 +537,10 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
               <div className="field-inline repeat-row">
                 <span>Повторів</span>
                 <div className="seg seg-small">
-                  <button type="button" className={form.repeat == null ? 'is-on' : ''} onClick={() => setForm({ ...form, repeat: null })}>
+                  <button type="button" aria-pressed={form.repeat == null} className={form.repeat == null ? 'is-on' : ''} onClick={() => setForm({ ...form, repeat: null })}>
                     Без обмежень
                   </button>
-                  <button type="button" className={form.repeat != null ? 'is-on' : ''} onClick={() => setForm({ ...form, repeat: form.repeat ?? 10 })}>
+                  <button type="button" aria-pressed={form.repeat != null} className={form.repeat != null ? 'is-on' : ''} onClick={() => setForm({ ...form, repeat: form.repeat ?? 10 })}>
                     Обмежити
                   </button>
                 </div>
@@ -819,16 +567,27 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
         </div>
       </div>
 
-      {(dirty || !job) && (
+      {!confirmLeave && (dirty || !job) && (
         <div className="save-bar">
           {invalid && (dirty || form.name) ? <span className="save-hint">{invalid}</span> : <span className="save-hint">{job ? 'Є незбережені зміни' : 'Нова задача'}</span>}
           {job && (
-            <button type="button" className="btn" onClick={() => setForm(saved)}>
+            <button type="button" className="btn" onClick={reset}>
               Скасувати
             </button>
           )}
-          <button type="button" className="btn btn-primary" disabled={!!invalid || busy === 'save'} onClick={() => void save()}>
+          <button type="button" className="btn btn-primary" disabled={!!invalid || busy === 'save'} onClick={() => void onSave()}>
             {busy === 'save' ? <Loader2 size={16} className="spin" /> : job ? 'Зберегти' : 'Створити'}
+          </button>
+        </div>
+      )}
+      {confirmLeave && (
+        <div className="save-bar is-warn">
+          <span className="save-hint">Зміни не збережено. Вийти без збереження?</span>
+          <button type="button" className="btn" onClick={() => setConfirmLeave(false)}>
+            Лишитись
+          </button>
+          <button type="button" className="btn btn-danger-solid" onClick={toList}>
+            Не зберігати
           </button>
         </div>
       )}

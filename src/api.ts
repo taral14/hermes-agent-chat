@@ -1,3 +1,4 @@
+import { ApiError, request } from './http.ts'
 import type {
   Attachment,
   Chat,
@@ -18,28 +19,7 @@ import type {
   StorageInfo,
 } from './shared.ts'
 
-export class ApiError extends Error {
-  status: number
-  constructor(status: number, message: string) {
-    super(message)
-    this.status = status
-  }
-}
-
-async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: 'same-origin',
-  })
-  const data = (await res.json().catch(() => ({}))) as { error?: string }
-  if (!res.ok) {
-    if (res.status === 401 && path !== '/api/login') window.dispatchEvent(new Event('chat:unauthorized'))
-    throw new ApiError(res.status, data.error ?? `Помилка ${res.status}`)
-  }
-  return data as T
-}
+const req = <T>(method: string, path: string, body?: unknown) => request<T>(method, path, { body })
 
 export const api = {
   me: () => req<{ username: string }>('GET', '/api/me'),
@@ -70,6 +50,7 @@ export const api = {
   deleteList: (id: string) => req('DELETE', `/api/lists/${id}`),
   jobs: () => req<Job[]>('GET', '/api/jobs'),
   jobChats: () => req<JobChatInfo[]>('GET', '/api/jobs/chats'),
+  jobsMeta: () => req<{ timezone: string; configured: boolean }>('GET', '/api/jobs/meta'),
   job: (id: string) => req<Job>('GET', `/api/jobs/${id}`),
   createJob: (body: JobInput) => req<Job>('POST', '/api/jobs', body),
   updateJob: (id: string, body: Partial<JobInput> & { enabled?: boolean }) => req<Job>('PATCH', `/api/jobs/${id}`, body),
@@ -86,24 +67,15 @@ export const api = {
   share: (chatId: string) => req<{ share: ShareInfo | null }>('GET', `/api/chats/${chatId}/share`),
   createShare: (chatId: string) => req<{ share: ShareInfo }>('POST', `/api/chats/${chatId}/share`),
   deleteShare: (chatId: string) => req<{ share: null }>('DELETE', `/api/chats/${chatId}/share`),
-  publicShare: async (token: string): Promise<SharedChat> => {
-    const res = await fetch(`/api/public/share/${token}`)
-    const data = (await res.json().catch(() => ({}))) as SharedChat & { error?: string }
-    if (!res.ok) throw new ApiError(res.status, data.error ?? `Помилка ${res.status}`)
-    return data
-  },
-  async upload(file: File): Promise<Attachment> {
-    const res = await fetch('/api/uploads', {
-      method: 'POST',
+  publicShare: (token: string) => req<SharedChat>('GET', `/api/public/share/${token}`),
+  upload: (file: File) =>
+    request<Attachment>('POST', '/api/uploads', {
+      raw: file,
       headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) },
-      body: file,
-      credentials: 'same-origin',
-    })
-    const data = (await res.json().catch(() => ({}))) as Attachment & { error?: string }
-    if (!res.ok) throw new ApiError(res.status, data.error ?? `Помилка ${res.status}`)
-    return data
-  },
+    }),
 }
+
+export { ApiError }
 
 export type CommandInfo = { name: string; description: string; hint?: string; skill?: boolean }
 

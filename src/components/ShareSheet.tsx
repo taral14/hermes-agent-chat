@@ -1,15 +1,9 @@
 import { Check, Copy, ExternalLink, Link2, Loader2, RefreshCw, Share, Trash2, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api.ts'
-import { relative } from '../schedule.ts'
+import { plural, relative } from '../schedule.ts'
 import type { Chat, ShareInfo } from '../shared.ts'
-
-const plural = (n: number, one: string, few: string, many: string) => {
-  const d = n % 10
-  const h = n % 100
-  return d === 1 && h !== 11 ? one : d >= 2 && d <= 4 && (h < 12 || h > 14) ? few : many
-}
+import { Sheet } from './ui/Sheet.tsx'
 
 /** Поділитися чатом: посилання лише для перегляду, знімок до моменту створення чи оновлення. */
 export function ShareSheet({ chat, onClose }: { chat: Chat; onClose: () => void }) {
@@ -19,17 +13,22 @@ export function ShareSheet({ chat, onClose }: { chat: Chat; onClose: () => void 
   const [copied, setCopied] = useState(false)
   const [confirm, setConfirm] = useState(false)
 
+  /** Людина вже щось змінила: пізня відповідь початкового запиту не має повернути старий стан. */
+  const touched = useRef(false)
   useEffect(() => {
+    touched.current = false
+    let alive = true
     api
       .share(chat.id)
-      .then((r) => setInfo(r.share))
-      .catch((e: Error) => setMsg(e.message))
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', esc)
-    return () => document.removeEventListener('keydown', esc)
-  }, [chat.id, onClose])
+      .then((r) => alive && !touched.current && setInfo(r.share))
+      .catch((e: Error) => alive && setMsg(e.message))
+    return () => {
+      alive = false
+    }
+  }, [chat.id])
 
   const run = async (kind: string, fn: () => Promise<void>) => {
+    touched.current = true
     setBusy(kind)
     setMsg('')
     try {
@@ -53,16 +52,8 @@ export function ShareSheet({ chat, onClose }: { chat: Chat; onClose: () => void 
   }
   const nativeShare = typeof navigator.share === 'function'
 
-  return createPortal(
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet share-sheet" role="dialog" aria-modal="true" aria-label="Поділитися чатом" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grip" />
-        <div className="sheet-head">
-          <h2>Поділитися чатом</h2>
-          <button type="button" className="icon-btn round" onClick={onClose} aria-label="Закрити">
-            <X size={20} />
-          </button>
-        </div>
+  return (
+    <Sheet title="Поділитися чатом" className="share-sheet" onClose={onClose}>
         <p className="sheet-lead">
           Хто має посилання, побачить цей діалог лише для читання: повідомлення, відповіді Hermes і прикріплені файли. Хід роботи Hermes і великі
           файли, що лежать лише на сервері, не видно.
@@ -144,8 +135,6 @@ export function ShareSheet({ chat, onClose }: { chat: Chat; onClose: () => void 
           </>
         )}
         {msg && <div className="notif-msg">{msg}</div>}
-      </div>
-    </div>,
-    document.body,
+    </Sheet>
   )
 }

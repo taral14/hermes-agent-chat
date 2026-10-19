@@ -82,6 +82,7 @@ export function KbGraph({ nodes: input, edges: inputEdges, focus, onOpen }: Prop
     hover: number
     folders: string[]
     neighbors: Map<number, Set<number>>
+    focus: string | null | undefined
   } | null>(null)
   const [folders, setFolders] = useState<string[]>([])
   const draw = useRef<() => void>(() => {})
@@ -102,21 +103,35 @@ export function KbGraph({ nodes: input, edges: inputEdges, focus, onOpen }: Prop
     }
     const fs = [...new Set(input.map((n) => n.folder))].sort((a, b) => a.localeCompare(b, 'uk'))
     setFolders(fs)
+    // Сховище оновилось під час перегляду: старі вузли лишаються на місцях, вид не скидається.
+    const prev = state.current
+    const was = new Map(prev?.nodes.map((n) => [n.id, n]))
     // Старт: вузли однієї папки поруч, щоб розкладка збиралась у зрозумілі кластери.
     const nodes: Node[] = input.map((n, i) => {
       const fi = fs.indexOf(n.folder)
       const angle = (fi / Math.max(1, fs.length)) * Math.PI * 2
+      const old = was.get(n.id)
       return {
         ...n,
-        x: Math.cos(angle) * 300 + (Math.random() - 0.5) * 120,
-        y: Math.sin(angle) * 300 + (Math.random() - 0.5) * 120,
+        x: old?.x ?? Math.cos(angle) * 300 + (Math.random() - 0.5) * 120,
+        y: old?.y ?? Math.sin(angle) * 300 + (Math.random() - 0.5) * 120,
         vx: 0,
         vy: 0,
         deg: deg[i]!,
       }
     })
     layout(nodes, edges)
-    state.current = { nodes, edges, view: { x: 0, y: 0, s: 0.55 }, fit: focus ?? '', hover: -1, folders: fs, neighbors }
+    const keepView = prev && prev.focus === focus
+    state.current = {
+      nodes,
+      edges,
+      view: keepView ? prev.view : { x: 0, y: 0, s: 0.55 },
+      fit: keepView ? null : (focus ?? ''),
+      hover: -1,
+      folders: fs,
+      neighbors,
+      focus,
+    }
     draw.current()
   }, [input, inputEdges, focus])
 
@@ -295,13 +310,19 @@ export function KbGraph({ nodes: input, edges: inputEdges, focus, onOpen }: Prop
     el.addEventListener('pointerdown', down)
     el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up)
-    el.addEventListener('pointercancel', up)
+    // Скасований дотик (прокрутка сторінки, системний жест) — не клік по вузлу.
+    const cancel = (e: PointerEvent) => {
+      pointers.delete(e.pointerId)
+      if (pointers.size < 2) pinch = 0
+      moved = true
+    }
+    el.addEventListener('pointercancel', cancel)
     el.addEventListener('wheel', wheel, { passive: false })
     return () => {
       el.removeEventListener('pointerdown', down)
       el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up)
-      el.removeEventListener('pointercancel', up)
+      el.removeEventListener('pointercancel', cancel)
       el.removeEventListener('wheel', wheel)
     }
   }, [onOpen])

@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm'
 import { kb, notePath, obsidianToMarkdown, plainSnippet } from '../kb.ts'
 import { formatDate, relative } from '../schedule.ts'
 import type { KbNote, KbNoteFull } from '../shared.ts'
-import { TopBar } from './Jobs.tsx'
+import { TopBar } from './ui/TopBar.tsx'
 import { KbGraph } from './KbGraph.tsx'
 import { CopyButton } from './Markdown.tsx'
 
@@ -293,8 +293,17 @@ function Home({ go, sidebarOpen, openSidebar, version }: Props) {
   useEffect(() => {
     const q = query.trim()
     if (!q) return setResults(null)
-    const t = setTimeout(() => kb.search(q).then(setResults).catch(() => setResults([])), 200)
-    return () => clearTimeout(t)
+    // Відповідь на старий запит (людина вже дописала чи стерла) відкидаємо.
+    let alive = true
+    const t = setTimeout(() => {
+      kb.search(q)
+        .then((r) => alive && setResults(r))
+        .catch(() => alive && setResults([]))
+    }, 200)
+    return () => {
+      alive = false
+      clearTimeout(t)
+    }
   }, [query, version])
 
   const tree = useMemo(() => (index ? buildTree(index.list) : null), [index])
@@ -385,8 +394,20 @@ function Home({ go, sidebarOpen, openSidebar, version }: Props) {
 
 function GraphPage({ go, back, sidebarOpen, openSidebar, route, version }: Props) {
   const [data, setData] = useState<{ nodes: { id: string; title: string; folder: string }[]; edges: [string, string][] } | null>(null)
+  const [error, setError] = useState('')
   useEffect(() => {
-    kb.graph().then(setData).catch(() => {})
+    let alive = true
+    kb.graph()
+      .then((d) => {
+        if (!alive) return
+        setError('')
+        // Те саме сховище без змін у зв'язках — не перебудовуємо граф, щоб він не стрибав.
+        setData((prev) => (prev && JSON.stringify(prev) === JSON.stringify(d) ? prev : d))
+      })
+      .catch((e: Error) => alive && setError(e.message))
+    return () => {
+      alive = false
+    }
   }, [version])
   const open = useCallback((p: string) => go({ kind: 'note', path: p }), [go])
   return (
@@ -394,6 +415,10 @@ function GraphPage({ go, back, sidebarOpen, openSidebar, route, version }: Props
       <TopBar title="Граф зв’язків" back={back} sidebarOpen={sidebarOpen} openSidebar={openSidebar} />
       {data ? (
         <KbGraph nodes={data.nodes} edges={data.edges} focus={route.kind === 'graph' ? route.focus : null} onOpen={open} />
+      ) : error ? (
+        <div className="jobs-empty">
+          <p>Не вдалося завантажити граф: {error}</p>
+        </div>
       ) : (
         <div className="jobs-loading">
           <Loader2 size={22} className="spin" />

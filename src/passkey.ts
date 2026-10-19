@@ -6,29 +6,14 @@ import {
   startAuthentication,
   startRegistration,
 } from '@simplewebauthn/browser'
+import { request } from './http.ts'
 
 export type PasskeyInfo = { id: string; name: string; kind: 'device' | 'security-key'; backedUp: boolean; createdAt: number; lastUsedAt: number | null }
 export type SessionInfo = { id: string; createdAt: number; lastSeen: number; ua: string; ip: string; current: boolean }
 export type Security = { passkeys: PasskeyInfo[]; passwordLogin: boolean; sessions: SessionInfo[] }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'same-origin' })
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string }
-  if (!res.ok) throw new Error(data.error ?? `Помилка ${res.status}`)
-  return data
-}
-
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: 'same-origin',
-  })
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string }
-  if (!res.ok) throw new Error(data.error ?? `Помилка ${res.status}`)
-  return data
-}
+const post = <T>(path: string, body: unknown) => request<T>('POST', path, { body })
+const call = <T>(method: string, path: string, body?: unknown) => request<T>(method, path, { body })
 
 export const supported = () => browserSupportsWebAuthn()
 

@@ -1,9 +1,10 @@
 import { Fingerprint, KeyRound, Laptop, LogOut, Loader2, Pencil, ShieldCheck, Smartphone, Trash2, Usb, X } from 'lucide-react'
-import { createPortal } from 'react-dom'
 import { useEffect, useState } from 'react'
 import * as passkey from '../passkey.ts'
 import type { PasskeyInfo, Security as SecurityState, SessionInfo } from '../passkey.ts'
 import { relative } from '../schedule.ts'
+import { Sheet } from './ui/Sheet.tsx'
+import { Switch } from './ui/Switch.tsx'
 
 function KeyRow({ k, onChange, onError }: { k: PasskeyInfo; onChange: (s: SecurityState) => void; onError: (m: string) => void }) {
   const [editing, setEditing] = useState(false)
@@ -93,10 +94,7 @@ export function Security({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     passkey.security().then(setState).catch((e: Error) => setMsg(e.message))
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', esc)
-    return () => document.removeEventListener('keydown', esc)
-  }, [onClose])
+  }, [])
 
   const add = async (kind: 'device' | 'security-key') => {
     setBusy(kind)
@@ -112,16 +110,7 @@ export function Security({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    createPortal(
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label="Безпека" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grip" />
-        <div className="sheet-head">
-          <h2>Вхід і безпека</h2>
-          <button type="button" className="icon-btn round" onClick={onClose} aria-label="Закрити">
-            <X size={20} />
-          </button>
-        </div>
+    <Sheet title="Вхід і безпека" onClose={onClose}>
 
         {!state ? (
           <div className="jobs-loading">
@@ -174,23 +163,19 @@ export function Security({ onClose }: { onClose: () => void }) {
                     : 'Щоб вимкнути пароль, спершу додай ключ'}
                 </span>
               </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={state.passwordLogin}
-                disabled={!state.passkeys.length || busy === 'pw'}
-                className={`switch ${state.passwordLogin ? 'is-on' : ''}`}
-                onClick={() => {
+              <Switch
+                on={state.passwordLogin}
+                busy={busy === 'pw'}
+                disabled={!state.passkeys.length}
+                onChange={(v) => {
                   setBusy('pw')
                   passkey
-                    .setPasswordLogin(!state.passwordLogin)
+                    .setPasswordLogin(v)
                     .then(setState)
                     .catch((e: Error) => setMsg(e.message))
                     .finally(() => setBusy(''))
                 }}
-              >
-                <span className="switch-knob" />
-              </button>
+              />
             </label>
             {!state.passwordLogin && (
               <p className="notif-foot">Якщо загубиш усі ключі: додай рядок allow_password: true у config.yaml чату на сервері.</p>
@@ -222,9 +207,6 @@ export function Security({ onClose }: { onClose: () => void }) {
           </>
         )}
         {msg && <div className="notif-msg">{msg}</div>}
-      </div>
-    </div>,
-    document.body,
-    )
+    </Sheet>
   )
 }

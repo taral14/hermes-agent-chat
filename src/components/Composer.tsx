@@ -1,6 +1,7 @@
 import { ArrowUp, Check, ChevronDown, FileText, Hand, ListChecks, Loader2, MessageSquarePlus, Paperclip, Sparkles, Square, SquareSlash, X, Zap, type LucideIcon } from 'lucide-react'
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { type CommandInfo, api, uploadUrl } from '../api.ts'
+import { useAutosize } from '../hooks/useAutosize.ts'
 import { getPrefs } from '../prefs.ts'
 import type { Attachment, ChatMode } from '../shared.ts'
 
@@ -86,6 +87,9 @@ export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, comm
   const [busy, setBusy] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
+  /** Чат, у якому поле зараз: надсилання могло закінчитись уже після переходу в інший. */
+  const keyRef = useRef(draftKey)
+  keyRef.current = draftKey
 
   useEffect(() => {
     setText(drafts.get(draftKey) ?? '')
@@ -93,17 +97,25 @@ export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, comm
     area.current?.focus()
   }, [draftKey])
 
+  // Прев'ю картинок — blob-адреси: звільняємо пам'ять, щойно файл прибрано з поля.
+  const previews = useRef(new Set<string>())
   useEffect(() => {
-    const el = area.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 240)}px`
-  }, [text])
+    const live = new Set(files.map((f) => f.preview))
+    for (const u of previews.current) {
+      if (live.has(u)) continue
+      URL.revokeObjectURL(u)
+      previews.current.delete(u)
+    }
+  }, [files])
+  useEffect(() => () => previews.current.forEach((u) => URL.revokeObjectURL(u)), [])
+
+  useAutosize(area, text, 240)
 
   const addFiles = (list: FileList | File[]) => {
     for (const file of Array.from(list)) {
       const key = Math.random().toString(36).slice(2)
       const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+      if (preview) previews.current.add(preview)
       setFiles((f) => [...f, { key, name: file.name || 'image.png', mime: file.type, preview }])
       const named = file.name ? file : new File([file], `image-${Date.now()}.png`, { type: file.type })
       api
@@ -169,14 +181,17 @@ export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, comm
 
   const submit = async () => {
     if (!canSend) return
+    const key = draftKey
+    const steering = running
     setBusy(true)
-    const ok = running ? await onSteer(text.trim()) : await onSend(text.trim(), ready)
+    const ok = steering ? await onSteer(text.trim()) : await onSend(text.trim(), ready)
     setBusy(false)
-    if (ok) {
-      setText('')
-      drafts.delete(draftKey)
-      if (!running) setFiles([])
-    }
+    if (!ok) return
+    drafts.delete(key)
+    // Поки йшло надсилання, людина могла перейти в інший чат: його чернетку не чіпаємо.
+    if (keyRef.current !== key) return
+    setText('')
+    if (!steering) setFiles([])
     area.current?.focus()
   }
 

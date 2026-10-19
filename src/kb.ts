@@ -140,16 +140,29 @@ export function findNote(notes: KbNote[], raw: string, vault = vaultName): KbNot
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const noteLink = (n: KbNote, text?: string) => `[${(text || n.title).replace(/[[\]]/g, '')}](kbnote:${encodeURIComponent(n.path)})`
 
+type Matcher = { pathRe: RegExp | null; byPath: Map<string, KbNote> }
+/** Регулярка зі шляхів усіх нотаток велика: будуємо її раз на індекс, а не на кожен токен відповіді. */
+const matchers = new WeakMap<KbNote[], Map<string, Matcher>>()
+
+function matcher(notes: KbNote[], vault: string): Matcher {
+  let byVault = matchers.get(notes)
+  if (!byVault) matchers.set(notes, (byVault = new Map()))
+  let m = byVault.get(vault)
+  if (m) return m
+  // Повні шляхи нотаток, довші першими, щоб «A/B.md» не з'їв частину «A/B.md.bak».
+  const paths = notes.map((n) => n.path).filter((p) => p.includes('/') || p.length > 6).sort((a, b) => b.length - a.length)
+  // Перед шляхом може стояти повний шлях до сховища (з пробілами, як «Mobile Documents» в iCloud).
+  const v = vault ? escapeRe(vault) : ''
+  const prefix = v ? `(?:(?:~|/Users/|/home/)[^\\n\`"'()]*?${v}/|${v}/)?` : ''
+  m = { pathRe: paths.length ? new RegExp(`${prefix}(${paths.map(escapeRe).join('|')})`, 'g') : null, byPath: new Map(notes.map((n) => [n.path, n])) }
+  byVault.set(vault, m)
+  return m
+}
+
 /** Згадки нотаток у тексті відповіді → посилання kbnote:. Код у ``` і наявні посилання не чіпаємо. */
 export function linkifyNotes(text: string, notes: KbNote[] | null, vault = vaultName): string {
   if (!notes?.length || !/\.md\b|\[\[/.test(text)) return text
-  // Повні шляхи нотаток, довші першими, щоб «A/B.md» не з'їв частину «A/B.md.bak».
-  const paths = notes.map((n) => n.path).filter((p) => p.includes('/') || p.length > 6).sort((a, b) => b.length - a.length)
-  const byPath = new Map(notes.map((n) => [n.path, n]))
-  // Перед шляхом може стояти повний шлях до сховища (з пробілами, як «Mobile Documents» в iCloud).
-  const v = vault ? escapeRe(vault) : ''
-  const prefix = v ? `(?:(?:~|/Users/)[^\\n\`"'()]*?${v}/|${v}/)?` : ''
-  const pathRe = paths.length ? new RegExp(`${prefix}(${paths.map(escapeRe).join('|')})`, 'g') : null
+  const { pathRe, byPath } = matcher(notes, vault)
   return text
     .split(/(```[\s\S]*?```|`[^`\n]+`|\[[^\]\n]*\]\([^)\n]*\))/g)
     .map((chunk, i) => {

@@ -27,6 +27,8 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useEscapeLayer } from './ui/layers.ts'
+import { Switch } from './ui/Switch.tsx'
 import { api } from '../api.ts'
 import { formatSize } from '../fileKind.ts'
 import { TEXT_SIZES, type Theme, setPrefs, usePrefs } from '../prefs.ts'
@@ -65,9 +67,7 @@ function ToggleRow({ title, hint, value, onChange }: { title: string; hint?: str
         <span className="set-row-title">{title}</span>
         {hint && <span className="set-row-hint">{hint}</span>}
       </span>
-      <button type="button" role="switch" aria-checked={value} className={`switch ${value ? 'is-on' : ''}`} onClick={() => onChange(!value)}>
-        <span className="switch-knob" />
-      </button>
+      <Switch on={value} onChange={onChange} />
     </label>
   )
 }
@@ -224,6 +224,12 @@ function Chats({ prefs, models, onChange }: { prefs: ChatPrefs; models: ModelOpt
             onChange={(e) => {
               setDraft(e.target.value)
               setSaved(false)
+            }}
+            // Перехід в інший розділ прибирає це поле: зберігаємо, щойно воно втратило фокус.
+            onBlur={() => {
+              if (!dirty) return
+              onChange({ instructions: draft.trim() })
+              setSaved(true)
             }}
           />
           <div className="set-instructions-foot">
@@ -515,11 +521,9 @@ export function Settings(p: Props) {
 
   useEffect(() => {
     api.settings().then(setInfo).catch((e: Error) => setErr(e.message))
-    // Escape закриває налаштування, якщо поверх не відкрита шторка (сповіщення, безпека, модель).
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('.sheet-backdrop') && close.current()
-    document.addEventListener('keydown', esc)
-    return () => document.removeEventListener('keydown', esc)
   }, [])
+  // Escape закриває налаштування, якщо поверх не відкрита шторка (сповіщення, безпека, модель).
+  useEscapeLayer(() => close.current())
 
   const change = (patch: Partial<ChatPrefs>) => {
     if (!info) return

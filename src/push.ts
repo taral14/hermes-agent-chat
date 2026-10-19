@@ -1,17 +1,8 @@
 // Веб-пуші на клієнті: service worker, підписка, присутність (щоб не пушити те, що людина й так бачить).
+import { request } from './http.ts'
 import type { PushSettings } from './shared.ts'
 
-const json = async <T>(path: string, body?: unknown): Promise<T> => {
-  const res = await fetch(path, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: 'same-origin',
-  })
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string }
-  if (!res.ok) throw new Error(data.error ?? `Помилка ${res.status}`)
-  return data
-}
+const json = <T>(path: string, body?: unknown) => request<T>(body === undefined ? 'GET' : 'POST', path, { body })
 
 export const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isStandalone = () =>

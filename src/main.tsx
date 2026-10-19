@@ -4,6 +4,7 @@ import App from './App.tsx'
 import { setPublicFiles } from './api.ts'
 import './prefs.ts'
 import { ShareView } from './components/ShareView.tsx'
+import { ErrorBoundary } from './components/ui/ErrorBoundary.tsx'
 import { registerSW } from './push.ts'
 import './styles.css'
 
@@ -26,5 +27,7 @@ if (shareToken) setPublicFiles(shareToken)
 else void registerSW()
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>{shareToken ? <ShareView token={shareToken} /> : <App />}</StrictMode>,
+  <StrictMode>
+    <ErrorBoundary>{shareToken ? <ShareView token={shareToken} /> : <App />}</ErrorBoundary>
+  </StrictMode>,
 )

@@ -1,14 +1,13 @@
 import { Download, Pause, Play } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { uploadUrl } from '../api.ts'
+import { emit, on } from '../bus.ts'
 import type { Attachment } from '../shared.ts'
 
 const BARS = 56
 const SPEEDS = [1, 1.5, 2]
 const MAX_DECODE = 25 * 1024 * 1024
 
-/** Одночасно грає лише один програвач. */
-const PLAY_EVENT = 'chat:audio-play'
 
 function fmt(sec: number) {
   if (!Number.isFinite(sec) || sec < 0) sec = 0
@@ -30,10 +29,21 @@ function placeholder(seed: string): number[] {
 }
 
 const peaksCache = new Map<string, number[]>()
+/** Один файл декодуємо раз, навіть якщо програвачів кілька. */
+const decoding = new Map<string, Promise<number[] | null>>()
 
-async function decodePeaks(id: string): Promise<number[] | null> {
+function decodePeaks(id: string): Promise<number[] | null> {
   const cached = peaksCache.get(id)
-  if (cached) return cached
+  if (cached) return Promise.resolve(cached)
+  let p = decoding.get(id)
+  if (!p) {
+    p = decode(id).finally(() => decoding.delete(id))
+    decoding.set(id, p)
+  }
+  return p
+}
+
+async function decode(id: string): Promise<number[] | null> {
   const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
   if (!Ctx) return null
   const res = await fetch(uploadUrl(id), { credentials: 'same-origin' })
@@ -71,29 +81,32 @@ export function AudioPlayer({ a }: { a: Attachment }) {
   const [real, setReal] = useState(peaksCache.has(a.id))
   const dragging = useRef(false)
 
+  // Справжня хвиля: файл тягнемо й декодуємо, лише коли програвач з'явився на екрані.
   useEffect(() => {
-    if (real || a.size > MAX_DECODE) return
+    const el = wave.current
+    if (real || a.size > MAX_DECODE || !el) return
     let alive = true
-    decodePeaks(a.id)
-      .then((p) => {
-        if (alive && p) {
-          setPeaks(p)
-          setReal(true)
-        }
-      })
-      .catch(() => {})
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return
+      io.disconnect()
+      decodePeaks(a.id)
+        .then((p) => {
+          if (alive && p) {
+            setPeaks(p)
+            setReal(true)
+          }
+        })
+        .catch(() => {})
+    })
+    io.observe(el)
     return () => {
       alive = false
+      io.disconnect()
     }
   }, [a.id, a.size, real])
 
-  useEffect(() => {
-    const other = (e: Event) => {
-      if ((e as CustomEvent<string>).detail !== a.id) audio.current?.pause()
-    }
-    window.addEventListener(PLAY_EVENT, other)
-    return () => window.removeEventListener(PLAY_EVENT, other)
-  }, [a.id])
+  // Одночасно грає лише один програвач.
+  useEffect(() => on('audio-play', (id) => id !== a.id && audio.current?.pause()), [a.id])
 
   // Плавний прогрес: timeupdate на iPhone приходить рідко.
   useEffect(() => {
@@ -111,7 +124,7 @@ export function AudioPlayer({ a }: { a: Attachment }) {
     const el = audio.current
     if (!el) return
     if (el.paused) {
-      window.dispatchEvent(new CustomEvent(PLAY_EVENT, { detail: a.id }))
+      emit('audio-play', a.id)
       void el.play()
     } else el.pause()
   }

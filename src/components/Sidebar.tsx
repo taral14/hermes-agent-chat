@@ -106,6 +106,8 @@ function usePress(open: () => void) {
     if (press.current.timer) clearTimeout(press.current.timer)
     press.current.timer = null
   }
+  // Рядок зник (чат видалено) посеред довгого натискання: таймер не має відкрити меню неіснуючого чату.
+  useEffect(() => stop, [])
   return {
     fired: () => {
       const f = press.current.fired
@@ -132,14 +134,17 @@ function usePress(open: () => void) {
 }
 
 function useOutside(active: boolean, box: RefObject<HTMLElement | null>, close: () => void) {
+  // Остання версія close без перепідписки на кожен рендер.
+  const fn = useRef(close)
+  fn.current = close
   useEffect(() => {
     if (!active) return
     const on = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) close()
+      if (!box.current?.contains(e.target as Node)) fn.current()
     }
     document.addEventListener('mousedown', on)
     return () => document.removeEventListener('mousedown', on)
-  }, [active, box, close])
+  }, [active, box])
 }
 
 // ---------- Чат ----------

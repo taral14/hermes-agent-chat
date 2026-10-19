@@ -68,6 +68,28 @@ export async function sessionTitle(sessionId: string): Promise<string | null> {
   }
 }
 
+/**
+ * Часовий пояс, у якому Hermes рахує розклад (як hermes_time.get_timezone): HERMES_TIMEZONE, потім timezone
+ * з config.yaml, інакше час сервера. null — пояс не задано (тоді в Hermes бувають зсуви на годину після зміни часу).
+ */
+export function hermesTimezone(): string | null {
+  const env = process.env.HERMES_TIMEZONE?.trim()
+  if (env) return env
+  try {
+    const fromEnv = /^HERMES_TIMEZONE=["']?([^"'\n]+)/m.exec(readFileSync(hermesPath('.env'), 'utf8'))?.[1]?.trim()
+    if (fromEnv) return fromEnv
+  } catch {
+    /* немає .env */
+  }
+  try {
+    const cfg = parseYaml(readFileSync(hermesPath('config.yaml'), 'utf8')) as { timezone?: unknown }
+    const tz = String(cfg?.timezone ?? '').trim()
+    return tz || null
+  } catch {
+    return null
+  }
+}
+
 /** agent.reasoning_effort з ~/.hermes/config.yaml (за замовчуванням medium). */
 export function defaultEffort(): string {
   try {

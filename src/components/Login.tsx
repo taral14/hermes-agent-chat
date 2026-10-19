@@ -71,8 +71,8 @@ export function Login({ onDone }: { onDone: () => void }) {
         {showKey && showPassword && <div className="login-or">або</div>}
         {showPassword && (
           <>
-            <input autoComplete="username webauthn" placeholder="Логін" value={username} onChange={(e) => setUsername(e.target.value)} />
-            <input type="password" autoComplete="current-password" placeholder="Пароль" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input autoComplete="username webauthn" aria-label="Логін" placeholder="Логін" value={username} onChange={(e) => setUsername(e.target.value)} />
+            <input type="password" autoComplete="current-password" aria-label="Пароль" placeholder="Пароль" value={password} onChange={(e) => setPassword(e.target.value)} />
             <button type="submit" className={`btn btn-wide ${showKey ? '' : 'btn-primary'}`} disabled={busy === 'password' || !username || !password}>
               {busy === 'password' ? <Loader2 size={18} className="spin" /> : 'Увійти з паролем'}
             </button>

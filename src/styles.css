@@ -1330,6 +1330,32 @@ button.act-line:hover:not(:disabled) {
   border-radius: 12px;
 }
 
+.md-image-gate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.875em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.md-image-gate:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.md-image-gate span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .code-block {
   margin: 0 0 1em;
   border-radius: 14px;
@@ -2039,6 +2065,45 @@ button.act-line:hover:not(:disabled) {
   transition: background 0.15s;
 }
 
+.job-row {
+  position: relative;
+}
+
+.job-row-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.job-row-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.job-row-open:focus-visible {
+  outline: none;
+}
+
+.job-row:has(.job-row-open:focus-visible) {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.job-row > .switch,
+.job-row > .job-move {
+  position: relative;
+  z-index: 1;
+}
+
 .job-row + .job-row {
   border-top: 1px solid var(--border);
 }
@@ -2536,6 +2601,25 @@ button.act-line:hover:not(:disabled) {
 
 .sched-preview svg {
   color: var(--text-3);
+}
+
+.sched-zone {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.sched-zone svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+  color: var(--text-3);
+}
+
+.sched-zone code {
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--inline-code);
 }
 
 .sched-preview.is-bad {
@@ -6083,4 +6167,43 @@ a.job-chip:hover {
 a.job-action {
   text-decoration: none;
   color: inherit;
+}
+
+/* Шторки отримують фокус при відкритті (для клавіатури й читачів екрана), рамка тут не потрібна. */
+.sheet:focus {
+  outline: none;
+}
+
+.save-bar.is-warn .save-hint,
+.job-sheet-save.is-warn .save-hint {
+  color: var(--warn);
+}
+
+/* Чат старої версії: замість поля вводу — пояснення. */
+.composer-legacy {
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: var(--bubble);
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: center;
+}
+
+.ui-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: var(--app-h, 100vh);
+  padding: 24px;
+  background: var(--bg);
+  color: var(--text-2);
+  text-align: center;
+}
+
+.ui-msg-error {
+  margin: 8px 0;
 }

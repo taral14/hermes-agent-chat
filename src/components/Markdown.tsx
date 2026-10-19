@@ -1,8 +1,9 @@
-import { BookOpen, Check, Copy } from 'lucide-react'
-import { memo, useState, type ReactNode } from 'react'
-import ReactMarkdown, { type Components, defaultUrlTransform } from 'react-markdown'
+import { BookOpen, Check, Copy, ImageOff } from 'lucide-react'
+import { memo, useMemo, useState, type ReactNode } from 'react'
+import ReactMarkdown, { type Components, type Options, defaultUrlTransform } from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
+import { emit } from '../bus.ts'
 import { linkifyNotes, notePath, useNoteIndex } from '../kb.ts'
 
 function textOf(node: ReactNode): string {
@@ -59,8 +60,7 @@ const components: Components = {
           title={path}
           onClick={(e) => {
             if (e.metaKey || e.ctrlKey) return
-            e.preventDefault()
-            window.dispatchEvent(new CustomEvent('chat:kbnote', { detail: path }))
+            if (emit('kbnote', path)) e.preventDefault()
           }}
         >
           <BookOpen size={15} />
@@ -78,8 +78,7 @@ const components: Components = {
           href={href}
           className="note-chip"
           onClick={(e) => {
-            e.preventDefault()
-            window.dispatchEvent(new CustomEvent('chat:obsidian', { detail: href }))
+            if (emit('obsidian', href)) e.preventDefault()
           }}
         >
           <BookOpen size={15} />
@@ -93,6 +92,9 @@ const components: Components = {
       </a>
     )
   },
+  img({ src, alt }) {
+    return typeof src === 'string' && src ? <MdImage src={src} alt={alt ?? ''} /> : null
+  },
   table({ children }) {
     return (
       <div className="table-wrap">
@@ -100,6 +102,31 @@ const components: Components = {
       </div>
     )
   },
+}
+
+/**
+ * Картинка з Markdown. Свої файли показуємо одразу, а чужі адреси — лише після кліку: браузер сам ходить
+ * за картинкою, тож підкинута Hermes сторінка (prompt injection) могла б винести дані в адресі картинки.
+ */
+function MdImage({ src, alt }: { src: string; alt: string }) {
+  const own = src.startsWith('/') && !src.startsWith('//')
+  const [shown, setShown] = useState(own || src.startsWith('data:image/'))
+  if (shown) return <img src={src} alt={alt} loading="lazy" />
+  let host = src
+  try {
+    host = new URL(src).host
+  } catch {
+    /* лишаємо як є */
+  }
+  return (
+    <button type="button" className="md-image-gate" onClick={() => setShown(true)} title={src}>
+      <ImageOff size={16} />
+      <span>
+        Картинка з <b>{host}</b>
+        {alt ? ` · ${alt}` : ''} — показати
+      </span>
+    </button>
+  )
 }
 
 /** Назва нотатки з obsidian://open?...&file=Сховище%2FПапка%2FНазва → «Назва». */
@@ -132,18 +159,23 @@ function linkifyObsidian(text: string): string {
     .join('')
 }
 
+const REMARK = [remarkGfm]
+const REHYPE: Options['rehypePlugins'] = [[rehypeHighlight, { detect: false, ignoreMissing: true }]]
+const urlTransform = (url: string) => (url.startsWith('obsidian://') || url.startsWith('kbnote:') ? url : defaultUrlTransform(url))
+
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const mentions = /\.md\b|\[\[/.test(text)
   const notes = useNoteIndex(mentions)
+  const source = useMemo(() => linkifyNotes(linkifyObsidian(text), mentions ? notes : null), [text, mentions, notes])
   return (
     <div className="md">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+        remarkPlugins={REMARK}
+        rehypePlugins={REHYPE}
         components={components}
-        urlTransform={(url) => (url.startsWith('obsidian://') || url.startsWith('kbnote:') ? url : defaultUrlTransform(url))}
+        urlTransform={urlTransform}
       >
-        {linkifyNotes(linkifyObsidian(text), mentions ? notes : null)}
+        {source}
       </ReactMarkdown>
     </div>
   )

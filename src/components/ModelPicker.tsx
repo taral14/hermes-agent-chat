@@ -177,7 +177,7 @@ export function ModelPicker({ value, options, onChange, narrow }: Props) {
 
   return (
     <div className="mp" ref={box}>
-      <button type="button" className={`mp-btn ${open ? 'is-open' : ''}`} onClick={() => setOpen((o) => !o)} title="Модель і зусилля">
+      <button type="button" className={`mp-btn ${open ? 'is-open' : ''}`} onClick={() => setOpen((o) => !o)} title="Модель і зусилля" aria-haspopup="true" aria-expanded={open}>
         <span className="mp-btn-model">{prettyModel(model) || 'Модель'}</span>
         {effort && <span className="mp-btn-effort">{effortLabel(effort)}</span>}
         <ChevronDown size={14} />

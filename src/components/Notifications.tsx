@@ -1,8 +1,9 @@
-import { Bell, BellOff, CalendarClock, Loader2, MessageSquareText, Share, ShieldAlert, SquarePlus, X } from 'lucide-react'
-import { createPortal } from 'react-dom'
+import { Bell, BellOff, CalendarClock, Loader2, MessageSquareText, Share, ShieldAlert, SquarePlus } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import * as push from '../push.ts'
 import type { PushSettings } from '../shared.ts'
+import { Sheet } from './ui/Sheet.tsx'
+import { Switch } from './ui/Switch.tsx'
 
 type State = 'loading' | 'install' | 'unsupported' | 'denied' | 'off' | 'on'
 
@@ -14,9 +15,7 @@ function Row({ icon, title, hint, on, onChange }: { icon: ReactNode; title: stri
         <span className="notif-row-title">{title}</span>
         <span className="notif-row-hint">{hint}</span>
       </span>
-      <button type="button" role="switch" aria-checked={on} className={`switch ${on ? 'is-on' : ''}`} onClick={() => onChange(!on)}>
-        <span className="switch-knob" />
-      </button>
+      <Switch on={on} onChange={onChange} />
     </label>
   )
 }
@@ -41,12 +40,6 @@ export function Notifications({ onClose }: { onClose: () => void }) {
     })()
   }, [])
 
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', esc)
-    return () => document.removeEventListener('keydown', esc)
-  }, [onClose])
-
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key)
     setMsg('')
@@ -66,16 +59,7 @@ export function Notifications({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    createPortal(
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label="Сповіщення" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grip" />
-        <div className="sheet-head">
-          <h2>Сповіщення</h2>
-          <button type="button" className="icon-btn round" onClick={onClose} aria-label="Закрити">
-            <X size={20} />
-          </button>
-        </div>
+    <Sheet title="Сповіщення" onClose={onClose}>
 
         {state === 'loading' && (
           <div className="jobs-loading">
@@ -203,9 +187,6 @@ export function Notifications({ onClose }: { onClose: () => void }) {
           </>
         )}
         {msg && <div className="notif-msg">{msg}</div>}
-      </div>
-    </div>,
-    document.body,
-    )
+    </Sheet>
   )
 }

@@ -127,7 +127,8 @@ function describeCron(expr: string): string {
   return `Cron: ${expr}`
 }
 
-function plural(n: number, one: string, few: string, many: string) {
+/** Українська множина: 1 дія, 2 дії, 5 дій, 21 дія. */
+export function plural(n: number, one: string, few: string, many: string) {
   const m10 = n % 10
   const m100 = n % 100
   if (m10 === 1 && m100 !== 11) return one

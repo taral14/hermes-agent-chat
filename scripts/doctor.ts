@@ -18,6 +18,9 @@ import {
 } from '../server/config.ts'
 
 const DATA_DIR = process.env.DATA_DIR ?? join(ROOT, 'data')
+/** Найстаріша версія Hermes Agent, з якою чат перевірено. */
+const HERMES_TESTED = '0.22'
+const [TESTED_MAJOR, TESTED_MINOR] = HERMES_TESTED.split('.').map(Number) as [number, number]
 let problems = 0
 const ok = (m: string) => console.log(`  ✓ ${m}`)
 const warn = (m: string, fix?: string) => console.log(`  ⚠ ${m}${fix ? `\n      → ${fix}` : ''}`)
@@ -83,6 +86,28 @@ else {
       fail('Python Hermes не імпортує hermes_cli.gateway_client', 'онови Hermes Agent або перевір HERMES_AGENT_DIR')
     }
   }
+
+  // Чат говорить внутрішнім протоколом gateway Hermes; перевірено з цією версією.
+  let version = ''
+  try {
+    version = execFileSync('git', ['describe', '--tags'], { cwd: HERMES_AGENT_DIR, timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+  } catch {
+    /* не git-копія */
+  }
+  const [vMajor = 0, vMinor = 0] = (/^v?(\d+)\.(\d+)/.exec(version)?.slice(1) ?? []).map(Number)
+  if (!version) warn('версію Hermes не визначено', `чат перевірено з Hermes ${HERMES_TESTED}; з іншими версіями протокол gateway може відрізнятись`)
+  else if (vMajor > TESTED_MAJOR || (vMajor === TESTED_MAJOR && vMinor >= TESTED_MINOR)) ok(`Hermes ${version}`)
+  else fail(`Hermes ${version} старіший за ${HERMES_TESTED}`, 'онови Hermes Agent: hermes update')
+
+  let tz = process.env.HERMES_TIMEZONE ?? ''
+  try {
+    tz ||= String((parseYaml(readFileSync(hermesPath('config.yaml'), 'utf8')) as { timezone?: unknown } | null)?.timezone ?? '')
+  } catch {
+    /* немає config.yaml */
+  }
+  const local = Intl.DateTimeFormat().resolvedOptions().timeZone
+  if (tz.trim()) ok(`часовий пояс розкладу: ${tz}`)
+  else warn('у Hermes не задано часовий пояс: після переходу на літній чи зимовий час задачі зсуваються на годину', `додай timezone: ${local} у ${hermesPath('config.yaml')}`)
 }
 
 section('Hermes пише в чат (плагін webchat, необов’язково)')
