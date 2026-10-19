@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import type { Attachment, Part } from '../src/shared.ts'
 import { DATA_DIR, type MessageRow, createChat, getChat, getSetting, getUpload, insertMessage, listMessages, saveMessage, setSetting, updateChat } from './db.ts'
 import { collectMedia } from './media.ts'
+import { newId } from './util.ts'
 import { chatPrefs } from './prefs.ts'
 
 const TOKEN_FILE = join(DATA_DIR, '.hermes-hook-token')
@@ -21,7 +22,6 @@ export function hookTokenOk(header: string | undefined): boolean {
   return got.length === TOKEN.length && timingSafeEqual(got, TOKEN)
 }
 
-const newId = () => randomBytes(9).toString('base64url')
 const HOME = 'schedule'
 
 /** Чат каналу, якщо він уже є (без створення): для прив'язки задач до чатів. */

@@ -1,6 +1,6 @@
 // База знань: Obsidian-сховище, куди пише Hermes. Читаємо нотатки, розв'язуємо [[вікі-посилання]],
 // рахуємо зворотні посилання і стежимо за змінами, щоб показувати нове наживо.
-import { existsSync, readFileSync, watch } from 'node:fs'
+import { readFileSync, statSync, watch } from 'node:fs'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
@@ -275,7 +275,7 @@ export async function graph() {
 /** Безпечний повний шлях до файлу сховища (вкладення для ![[...]]). */
 export function vaultFile(rel: string): string | null {
   const full = resolve(VAULT, rel)
-  if (!full.startsWith(VAULT + sep) || !existsSync(full)) return null
+  if (!full.startsWith(VAULT + sep) || !statSync(full, { throwIfNoEntry: false })?.isFile()) return null
   if (rel.split('/').some((seg) => SKIP.has(seg))) return null
   return full
 }
@@ -302,7 +302,8 @@ export async function watchVault(onChange: (paths: string[]) => void) {
         const changed = [...pending].filter((p) => p.endsWith('.md'))
         pending = new Set()
         lastScan = 0
-        void scan().then(() => {
+        // Сканування, що вже йде, могло прочитати файл до зміни: чекаємо його і скануємо ще раз.
+        void (scanning ?? Promise.resolve()).then(scan).then(() => {
           if (changed.length) onChange(changed)
         })
       }, 700)

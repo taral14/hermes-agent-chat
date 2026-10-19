@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import type { Attachment } from '../src/shared.ts'
 import { DATA_DIR, UPLOAD_DIR, deleteUploadRow, insertUpload, orphanUploads } from './db.ts'
-import { HERMES_HOME, PUBLIC_HOST } from './config.ts'
+import { HERMES_HOME } from './config.ts'
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -87,19 +87,6 @@ export const MIME: Record<string, string> = {
 
 export const mimeOf = (name: string) => MIME[extname(name).toLowerCase()] ?? 'application/octet-stream'
 
-/** Те, що Hermes каже про файли в чаті. Додається до системного промпта кожного запуску. */
-export const CHAT_INSTRUCTIONS = [
-  `You are talking to the user through their private web chat (${PUBLIC_HOST}), which renders Markdown.`,
-  'To deliver a file to the user (audio you synthesized, an image, video, PDF, document, archive, anything),',
-  'put a line `MEDIA:/absolute/path/to/file` in your final answer, one line per file. The chat attaches the file',
-  'to your message: audio and video get a player, images a preview, other files a download card.',
-  'Do not paste the bare path or file contents instead, and do not explain how to open the file.',
-  'Any size is fine (even many GB): large files are not copied, the user downloads the original by a temporary link,',
-  'so never compress, split or move a file just to send it. Point MEDIA: at the file where it already is.',
-  'Files the user attaches are saved on this Mac and listed with absolute paths in their message.',
-  'When you create or mention a note in the Obsidian vault, refer to it by its path from the vault root in backticks',
-  '(e.g. `Gaming/Note name.md`) or as [[Note name]]: the chat turns it into a clickable note card.',
-].join(' ')
 
 const HOME = homedir()
 /** Секрети не віддаємо, навіть якщо модель про них згадала. */

@@ -7,8 +7,8 @@ import { listJobs } from './jobs.ts'
 
 let byChat = new Map<string, ChatJob[]>()
 let jobChat = new Map<string, string>()
-let lastOk = 0
 let running: Promise<string[]> | null = null
+let queued: Promise<string[]> | null = null
 
 const finished = (j: Job) => j.state === 'completed' || (j.repeat?.times != null && j.repeat.completed >= j.repeat.times && !j.enabled)
 
@@ -23,9 +23,20 @@ function chatsOf(deliver: string): string[] {
   return out
 }
 
-/** Перечитати задачі з Hermes. Повертає чати, у яких список задач змінився. */
+/**
+ * Перечитати задачі з Hermes. Повертає чати, у яких список задач змінився. Якщо читання вже йде, воно могло
+ * початись до зміни, тож після нього читаємо ще раз (один на всіх, хто чекає).
+ */
 export function refreshJobLinks(): Promise<string[]> {
-  if (running) return running
+  if (!running) return start()
+  queued ??= running.then(() => {
+    queued = null
+    return start()
+  })
+  return queued
+}
+
+function start(): Promise<string[]> {
   running = (async () => {
     let jobs: Job[]
     try {
@@ -49,7 +60,6 @@ export function refreshJobLinks(): Promise<string[]> {
     }
     byChat = next
     jobChat = nextJob
-    lastOk = Date.now()
     return changed
   })().finally(() => {
     running = null
@@ -59,7 +69,6 @@ export function refreshJobLinks(): Promise<string[]> {
 
 export const jobsForChat = (chatId: string): ChatJob[] => byChat.get(chatId) ?? []
 export const chatForJob = (jobId: string): string | null => jobChat.get(jobId) ?? null
-export const jobLinksAge = () => Date.now() - lastOk
 /** Чати, у які зараз пише хоч одна задача. */
 export const linkedChats = (): string[] => [...byChat.keys()]
 

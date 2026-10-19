@@ -38,11 +38,14 @@ export function relyingParty(req: IncomingMessage): { rpID: string; origin: stri
 
 type Pending = { challenge: string; rpID: string; origin: string; exp: number; kind?: 'device' | 'security-key' }
 const pending = new Map<string, Pending>()
+/** Більше незавершених входів одночасно не буває; решта — чийсь перебір, найстаріші відкидаємо. */
+const MAX_PENDING = 500
 
 function remember(p: Omit<Pending, 'exp'>): string {
   const id = randomBytes(12).toString('base64url')
   pending.set(id, { ...p, exp: Date.now() + 5 * 60_000 })
   for (const [k, v] of pending) if (v.exp < Date.now()) pending.delete(k)
+  while (pending.size > MAX_PENDING) pending.delete(pending.keys().next().value!)
   return id
 }
 

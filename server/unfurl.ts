@@ -8,6 +8,7 @@ import { lookup as dnsLookup, type LookupAddress } from 'node:dns'
 import { type IncomingMessage, request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { BlockList, isIP } from 'node:net'
+import { pipeline } from 'node:stream'
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
 import { youtubeId } from '../src/links.ts'
 import type { LinkPreview } from '../src/shared.ts'
@@ -96,8 +97,9 @@ async function fetchLimited(url: string, accept: string, maxBytes: number, stopA
     throw new Error(`HTTP ${status}`)
   }
   const enc = String(res.headers['content-encoding'] ?? '').toLowerCase()
-  const stream = enc === 'gzip' ? res.pipe(createGunzip()) : enc === 'br' ? res.pipe(createBrotliDecompress()) : enc === 'deflate' ? res.pipe(createInflate()) : res
-  stream.on('error', () => {})
+  const dec = enc === 'gzip' ? createGunzip() : enc === 'br' ? createBrotliDecompress() : enc === 'deflate' ? createInflate() : null
+  // pipeline, а не pipe: обрив чи тайм-аут відповіді має закрити й розпакувальник, інакше читання зависне назавжди.
+  const stream = dec ? pipeline(res, dec, () => {}) : res
   const chunks: Buffer[] = []
   let size = 0
   try {

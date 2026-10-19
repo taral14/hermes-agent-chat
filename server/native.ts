@@ -1,6 +1,6 @@
 // Двигун чату на рідному протоколі Hermes gateway: ті самі сесії, що в TUI/Desktop, слеш-команди,
 // перемотування історії (повтор/редагування), відгалуження, автоматизації (/goal, /loop, /heartbeat).
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { copyFileSync, mkdirSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import type { Attachment, ChatControl, Message, ModelChoice, Part } from '../src/shared.ts'
@@ -28,6 +28,7 @@ import { promptRaised } from './push.ts'
 import {
   type Live,
   autoApprove,
+  dropLive,
   findPart,
   finish,
   flush,
@@ -35,13 +36,11 @@ import {
   lastPart,
   liveMessages,
   openLive,
-  refreshTitle,
-} from './runs.ts'
+} from './live.ts'
+import { newId, str } from './util.ts'
 
 const IMAGE_STAGING = hermesPath('cache', 'images')
 const IMAGE_MIMES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp'])
-const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v))
-const newId = () => randomBytes(9).toString('base64url')
 
 type ChatChanged = (chatId: string) => void
 let chatChanged: ChatChanged = () => {}
@@ -50,6 +49,11 @@ let chatChanged: ChatChanged = () => {}
 const generations = new Map<string, number>()
 /** Повідомлення, що вже надіслане, але gateway ще не повернув admission_id (події можуть випередити відповідь). */
 const awaiting = new Map<string, string>()
+/**
+ * Події з невідомим admission_id, що прийшли, поки чекаємо квитанцію. Gateway не каже, чий це хід, аж до кінця,
+ * а в цей момент може стартувати й хід /loop чи /heartbeat. Тож розбираємо їх, лише коли квитанція прийде.
+ */
+const early = new Map<string, GatewayEvent[]>()
 
 export class NativeError extends Error {
   status: number
@@ -215,12 +219,21 @@ function bind(assistant: MessageRow, user: MessageRow | null, admissionId: strin
     if (l.msg.status === 'queued') l.msg.status = 'running'
     flush(l, true)
   }
-  if (awaiting.get(assistant.chatId) === assistant.id) awaiting.delete(assistant.chatId)
   if (user && !user.runId) {
     user.runId = admissionId
     // Запуск користувача й рядок у Hermes мають один id: так знаходимо, що перемотувати.
     saveMessage(user)
   }
+  settle(assistant.chatId, assistant.id)
+}
+
+/** Квитанцію отримано (або відправка впала): більше не чекаємо й розбираємо події, що прийшли раніше. */
+function settle(chatId: string, assistantId: string) {
+  if (awaiting.get(chatId) !== assistantId) return
+  awaiting.delete(chatId)
+  const held = early.get(chatId) ?? []
+  early.delete(chatId)
+  for (const e of held) onEvent(e)
 }
 
 export type SendResult = { user: MessageRow; assistant: MessageRow }
@@ -237,9 +250,9 @@ export async function nativeSend(chat: ChatRow, text: string, attachments: Attac
   try {
     await submit(chat, assistant, user, text)
   } catch (err) {
-    awaiting.delete(chat.id)
     const l = getLive(assistant.id)
     if (l) finish(l, 'error', { error: wrap(err).message })
+    settle(chat.id, assistant.id)
   }
   return { user, assistant }
 }
@@ -268,8 +281,8 @@ export async function nativeCommand(chat: ChatRow, command: string, display?: st
       finish(l, 'done', { text: str(r.output) || 'Готово.' })
     }
   } catch (err) {
-    awaiting.delete(chat.id)
     if (getLive(assistant.id)) finish(l, 'error', { error: wrap(err).message })
+    settle(chat.id, assistant.id)
   }
   return { user, assistant }
 }
@@ -441,15 +454,12 @@ function liveForEvent(chat: ChatRow, e: GatewayEvent): Live | null {
   const adm = e.admission_id
   if (!adm) return null
   for (const l of liveMessages()) if (l.msg.chatId === chat.id && l.msg.runId === adm) return l
-  // Наша відправка, на яку gateway ще не відповів квитанцією.
-  const waiting = awaiting.get(chat.id)
-  if (waiting) {
-    const l = getLive(waiting)
-    if (l && !l.msg.runId) {
-      const user = [...listMessages(chat.id)].reverse().find((m) => m.role === 'user' && !m.runId) ?? null
-      bind(l.msg, user, adm)
-      return l
-    }
+  // Чекаємо квитанцію на нашу відправку: чий це хід, стане ясно з неї (див. early).
+  if (awaiting.has(chat.id)) {
+    const held = early.get(chat.id) ?? []
+    if (held.length < 2000) held.push(e)
+    early.set(chat.id, held)
+    return null
   }
   if (!OPENERS.has(e.type)) return null
   // Пізня подія вже завершеного ходу — не створюємо дубль.
@@ -673,6 +683,13 @@ async function onConnected() {
   }
 }
 
+/** Чат видалено: забути його незавершені ходи, щоб вони не тримали сервер «зайнятим». */
+export function forgetChat(chatId: string) {
+  for (const id of dropLive(chatId)) generations.delete(id)
+  awaiting.delete(chatId)
+  early.delete(chatId)
+}
+
 export function initNative(onChat: ChatChanged) {
   chatChanged = onChat
   gateway.on({ event: onEvent, request: onRequest, connected: () => void onConnected() })
@@ -680,14 +697,17 @@ export function initNative(onChat: ChatChanged) {
   let pending = false
   for (const m of activeMessages()) {
     const chat = getChat(m.chatId)
-    if (chat?.engine !== 'native') continue
+    if (chat?.engine !== 'native') {
+      // Чат старої версії: його хід уже ніхто не доведе до кінця.
+      saveMessage({ ...m, status: 'interrupted', error: 'Задачу перервано оновленням чату.', finishedAt: Date.now() })
+      continue
+    }
     openLive(m)
     pending = true
   }
   if (pending) gateway.start()
 }
 
-export { refreshTitle }
 
 // ---------- Каталог команд ----------
 

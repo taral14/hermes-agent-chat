@@ -89,7 +89,11 @@ class Gateway {
       const text = d.toString().trim()
       if (text) console.warn(`[gateway-bridge] ${text.slice(0, 500)}`)
     })
-    child.on('exit', (code) => {
+    // Без обробників 'error' невдалий запуск Python (ENOENT) чи запис у мертвий міст (EPIPE) кладе весь сервер.
+    let gone = false
+    const down = (why: string) => {
+      if (gone) return
+      gone = true
       if (this.child === child) this.child = null
       this.ready = false
       for (const [id, p] of this.pending) {
@@ -98,10 +102,13 @@ class Gateway {
         this.pending.delete(id)
       }
       if (this.stopped) return
-      console.warn(`[gateway] міст завершився (код ${code}), перепідключаюсь за ${this.backoff / 1000} с`)
-      setTimeout(() => this.start(), this.backoff)
+      console.warn(`[gateway] міст завершився (${why}), перепідключаюсь за ${this.backoff / 1000} с`)
+      setTimeout(() => this.start(), this.backoff).unref()
       this.backoff = Math.min(this.backoff * 2, 30_000)
-    })
+    }
+    child.on('error', (err) => down(err.message))
+    child.stdin.on('error', () => child.kill())
+    child.on('exit', (code) => down(`код ${code}`))
   }
 
   stop() {
@@ -147,11 +154,15 @@ class Gateway {
     if (this.ready) return Promise.resolve()
     this.start()
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new GatewayError('unavailable', 'Hermes gateway недоступний')), timeoutMs)
-      this.readyWaiters.push(() => {
+      const w = () => {
         clearTimeout(t)
         resolve()
-      })
+      }
+      const t = setTimeout(() => {
+        this.readyWaiters = this.readyWaiters.filter((x) => x !== w)
+        reject(new GatewayError('unavailable', 'Hermes gateway недоступний'))
+      }, timeoutMs)
+      this.readyWaiters.push(w)
     })
   }
 
@@ -163,8 +174,12 @@ class Gateway {
         this.pending.delete(id)
         reject(new GatewayError('timeout', `Hermes не відповів на ${method}`))
       }, timeoutMs + 2000)
+      if (!this.child) {
+        clearTimeout(timer)
+        return reject(new GatewayError('disconnected', 'Зв’язок із Hermes обірвався'))
+      }
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer })
-      this.child!.stdin.write(JSON.stringify({ id, method, params, timeout: timeoutMs / 1000 }) + '\n')
+      this.child.stdin.write(JSON.stringify({ id, method, params, timeout: timeoutMs / 1000 }) + '\n')
     })
   }
 

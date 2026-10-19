@@ -1,7 +1,21 @@
 // Налаштування чату, спільні для всіх пристроїв: режим і модель нових чатів, особисті інструкції, автоназви.
 import type { ChatMode, ChatPrefs, ModelChoice } from '../src/shared.ts'
 import { getSetting, setSetting } from './db.ts'
-import { CHAT_INSTRUCTIONS } from './media.ts'
+import { PUBLIC_HOST } from './config.ts'
+
+/** Правила чату для Hermes: Markdown, файли через MEDIA:, нотатки Obsidian. Додаються до кожного запиту. */
+const CHAT_INSTRUCTIONS = [
+  `You are talking to the user through their private web chat (${PUBLIC_HOST}), which renders Markdown.`,
+  'To deliver a file to the user (audio you synthesized, an image, video, PDF, document, archive, anything),',
+  'put a line `MEDIA:/absolute/path/to/file` in your final answer, one line per file. The chat attaches the file',
+  'to your message: audio and video get a player, images a preview, other files a download card.',
+  'Do not paste the bare path or file contents instead, and do not explain how to open the file.',
+  'Any size is fine (even many GB): large files are not copied, the user downloads the original by a temporary link,',
+  'so never compress, split or move a file just to send it. Point MEDIA: at the file where it already is.',
+  'Files the user attaches are saved on this computer and listed with absolute paths in their message.',
+  'When you create or mention a note in the Obsidian vault, refer to it by its path from the vault root in backticks',
+  '(e.g. `Gaming/Note name.md`) or as [[Note name]]: the chat turns it into a clickable note card.',
+].join(' ')
 
 const DEFAULTS: ChatPrefs = { defaultMode: 'auto', defaultModel: null, instructions: '', autoTitles: true }
 const MODES: ChatMode[] = ['ask', 'auto', 'plan']
