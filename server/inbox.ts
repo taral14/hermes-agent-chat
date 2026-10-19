@@ -46,6 +46,14 @@ function channelChat(channel: string): string {
   return id
 }
 
+/** Окремий чат для задачі за розкладом: задача пише в нього за id (deliver=webchat:<id>). */
+export function newJobChat(title: string): string {
+  const id = newId()
+  createChat(id, '', null, 'native')
+  updateChat(id, { title: title.trim().slice(0, 80) || 'Задача', titleSource: 'user', mode: chatPrefs().defaultMode })
+  return id
+}
+
 /** Hermes обгортає результат задачі в заголовок і підпис для месенджерів; у чаті показуємо це плашкою. */
 function unwrapCron(text: string): { text: string; part: Extract<Part, { type: 'delivered' }> } {
   const m = /^Cronjob Response: (.+)\n\(job_id: ([^)]*)\)\n-+\n\n([\s\S]*?)(?:\n\nTo stop or manage this job, send me a new message[\s\S]*)?$/.exec(text)

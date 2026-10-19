@@ -60,6 +60,8 @@ export function refreshJobLinks(): Promise<string[]> {
 export const jobsForChat = (chatId: string): ChatJob[] => byChat.get(chatId) ?? []
 export const chatForJob = (jobId: string): string | null => jobChat.get(jobId) ?? null
 export const jobLinksAge = () => Date.now() - lastOk
+/** Чати, у які зараз пише хоч одна задача. */
+export const linkedChats = (): string[] => [...byChat.keys()]
 
 /**
  * Що Hermes має знати про задачі в цьому чаті: куди доставляти нові й якими вже можна керувати.

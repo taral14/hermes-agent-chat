@@ -7,8 +7,10 @@ import { parse as parseYaml } from 'yaml'
 import type {
   Attachment,
   ChatMode,
+  JobChatInfo,
   LinkPreview,
   ModelChoice,
+  Part,
   ServerEvent,
   SettingsInfo,
   ShareInfo,
@@ -108,8 +110,8 @@ import {
 } from './native.ts'
 import { gateway } from './gateway.ts'
 import { VAPID_PUBLIC, hermesDelivered, sendTest, setPresence } from './push.ts'
-import { hookTokenOk, receiveFromHermes } from './inbox.ts'
-import { chatForJob, jobsForChat, refreshJobLinks } from './jobLinks.ts'
+import { hookTokenOk, newJobChat, receiveFromHermes } from './inbox.ts'
+import { chatForJob, jobsForChat, linkedChats, refreshJobLinks } from './jobLinks.ts'
 import {
   activeRunCount,
   addSteer,
@@ -530,6 +532,39 @@ function syncJobLinks() {
   void refreshJobLinks().then((changed) => {
     for (const id of changed) emitChat(id)
   })
+}
+
+/** Чати, у які пишуть задачі, з останнім результатом — для сторінки «Розклад». */
+function jobChats(): JobChatInfo[] {
+  const out: JobChatInfo[] = []
+  for (const id of linkedChats()) {
+    const chat = getChat(id)
+    if (!chat) continue
+    const m = listMessages(id).findLast((x) => x.role === 'assistant' && (x.text.trim() || x.attachments.length))
+    const d = m?.parts.find((p) => p.type === 'delivered') as Extract<Part, { type: 'delivered' }> | undefined
+    const text = (m?.text ?? '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/!?\[([^\]]*)]\([^)]*\)/g, '$1')
+      .replace(/[*_`#>|~]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 220)
+    out.push({
+      id,
+      title: chat.title || 'Без назви',
+      updatedAt: chat.updatedAt,
+      last: m ? { text: text || `Файли: ${m.attachments.map((a) => a.name).join(', ')}`, at: m.createdAt, ...(d?.job ? { job: d.job } : {}) } : null,
+    })
+  }
+  return out.sort((a, b) => (b.last?.at ?? b.updatedAt) - (a.last?.at ?? a.updatedAt))
+}
+
+/** deliver «webchat:new» — створити задачі окремий чат і писати в нього. */
+function withNewChat<T extends { deliver?: unknown; name?: unknown }>(body: T, fallbackName: string): T {
+  if (typeof body.deliver !== 'string' || !body.deliver.split(',').some((t) => t.trim() === 'webchat:new')) return body
+  const id = newJobChat(typeof body.name === 'string' && body.name.trim() ? body.name : fallbackName)
+  emitChat(id)
+  return { ...body, deliver: body.deliver.split(',').map((t) => (t.trim() === 'webchat:new' ? `webchat:${id}` : t.trim())).join(',') }
 }
 
 // ---------- Спільний доступ (лише перегляд) ----------
@@ -1190,15 +1225,23 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL) {
   if (path.startsWith('/api/jobs')) {
     try {
       if (path === '/api/jobs' && method === 'GET') return send(res, 200, (await listJobs()).map((j) => ({ ...j, chatId: chatForJob(j.id) })))
+      if (path === '/api/jobs/chats' && method === 'GET') {
+        await refreshJobLinks()
+        return send(res, 200, jobChats())
+      }
       if (method !== 'GET') res.once('finish', syncJobLinks)
-      if (path === '/api/jobs' && method === 'POST') return send(res, 200, await createJob(await readJson(req)))
+      if (path === '/api/jobs' && method === 'POST') return send(res, 200, await createJob(withNewChat(await readJson<{ deliver?: unknown; name?: unknown }>(req), 'Задача')))
       const run = path.match(/^\/api\/jobs\/runs\/([\w-]+)$/)
       if (run && method === 'GET') return send(res, 200, { output: await runOutput(run[1]!) })
       const j = path.match(/^\/api\/jobs\/([\w-]+)(?:\/(runs|pause|resume|run))?$/)
       if (j) {
         const [, id, sub] = j as unknown as [string, string, string | undefined]
         if (!sub && method === 'GET') return send(res, 200, { ...(await getJob(id)), chatId: chatForJob(id) })
-        if (!sub && method === 'PATCH') return send(res, 200, await updateJob(id, await readJson(req)))
+        if (!sub && method === 'PATCH') {
+          const body = await readJson<{ deliver?: unknown; name?: unknown }>(req)
+          const patch = withNewChat(body, body.deliver === 'webchat:new' && !body.name ? (await getJob(id)).name : 'Задача')
+          return send(res, 200, await updateJob(id, patch))
+        }
         if (!sub && method === 'DELETE') {
           await deleteJob(id)
           return send(res, 200, { ok: true })

@@ -103,6 +103,9 @@ export type Chat = {
   jobs?: ChatJob[]
 }
 
+/** Чат, у який пишуть задачі за розкладом, для сторінки «Розклад». */
+export type JobChatInfo = { id: string; title: string; updatedAt: number; last: { text: string; at: number; job?: string } | null }
+
 /** Задача за розкладом, прив'язана до чату. */
 export type ChatJob = { id: string; name: string; enabled: boolean; schedule: string; nextRunAt: string | null }
 

@@ -1,11 +1,11 @@
 import {
   MessageSquare,
+  MessageSquarePlus,
   AlertTriangle,
   CalendarClock,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
-  Clock,
+  ChevronRight,
   FileCode2,
   Loader2,
   Menu,
@@ -36,7 +36,7 @@ import {
   relative,
   toDraft,
 } from '../schedule.ts'
-import type { Job, JobRun } from '../shared.ts'
+import type { Job, JobChatInfo, JobRun } from '../shared.ts'
 import { Markdown } from './Markdown.tsx'
 
 export type JobsRoute = { kind: 'list' } | { kind: 'job'; id: string } | { kind: 'new' }
@@ -116,63 +116,107 @@ export function TopBar({ title, back, right, sidebarOpen, openSidebar }: {
 
 // ---------- Список ----------
 
-function JobCard({ job, now, onOpen, onToggle }: { job: Job; now: number; onOpen: () => void; onToggle: (on: boolean) => Promise<void> }) {
+/** Перейти в чат застосунку без перезавантаження сторінки. */
+function openChat(e: React.MouseEvent, chatId: string) {
+  if (e.metaKey || e.ctrlKey) return
+  e.preventDefault()
+  history.pushState(null, '', `/c/${chatId}`)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
+function JobRow({ job, now, onOpen, onToggle, extra }: { job: Job; now: number; onOpen: () => void; onToggle: (on: boolean) => Promise<void>; extra?: ReactNode }) {
   const [busy, setBusy] = useState(false)
   const status = jobStatus(job)
   const toggleable = status !== 'done'
   const isOn = status !== 'paused' && status !== 'done'
+  const when =
+    status === 'done' ? `виконано ${relative(job.last_run_at, now)}` : status === 'paused' ? 'на паузі' : nextRun(job.next_run_at, now)
   return (
-    <div className={`job-card is-${status}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
-      <div className="job-card-head">
-        <div className="job-card-title">
-          {job.no_agent && (
-            <span className="job-tag" title="Скрипт без агента">
-              <FileCode2 size={12} /> скрипт
-            </span>
+    <div className={`job-row is-${status}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
+      <span className="job-row-icon">
+        {status === 'error' ? <AlertTriangle size={16} /> : job.no_agent ? <FileCode2 size={16} /> : job.schedule.kind === 'once' ? <CalendarClock size={16} /> : <Repeat size={16} />}
+      </span>
+      <span className="job-row-main">
+        <span className="job-row-name">{job.name}</span>
+        <span className="job-row-sub">
+          {describeSchedule(job.schedule)}
+          {/* В одноразової задачі розклад уже і є час запуску. */}
+          {(status !== 'active' || job.schedule.kind !== 'once') && (
+            <>
+              {' · '}
+              <span className={status === 'error' ? 'is-error' : ''}>{status === 'error' ? 'остання спроба не вдалася' : when}</span>
+            </>
           )}
-          <span className="job-name">{job.name}</span>
-        </div>
-        {toggleable && (
-          <Switch
-            on={isOn}
-            busy={busy}
-            label={isOn ? 'Поставити на паузу' : 'Продовжити'}
-            onChange={async (v) => {
-              setBusy(true)
-              await onToggle(v)
-              setBusy(false)
-            }}
-          />
-        )}
-      </div>
-      <div className="job-when">
-        {job.schedule.kind === 'once' ? <CalendarClock size={15} /> : <Repeat size={15} />}
-        <span>{describeSchedule(job.schedule)}</span>
-      </div>
-      <div className="job-meta">
-        {status === 'done' ? (
-          <span>Виконано {relative(job.last_run_at, now)}</span>
-        ) : status === 'paused' ? (
-          <span>На паузі</span>
-        ) : (
-          <span>
-            <Clock size={13} /> {nextRun(job.next_run_at, now)}
-          </span>
-        )}
-        {job.last_run_at && status !== 'done' && (
-          <span className={`job-last ${status === 'error' ? 'is-error' : ''}`}>
-            {status === 'error' ? <AlertTriangle size={13} /> : <CheckCircle2 size={13} />} {relative(job.last_run_at, now)}
-          </span>
-        )}
-      </div>
+        </span>
+      </span>
+      {extra}
+      {toggleable && (
+        <Switch
+          on={isOn}
+          busy={busy}
+          label={isOn ? 'Поставити на паузу' : 'Продовжити'}
+          onChange={async (v) => {
+            setBusy(true)
+            await onToggle(v)
+            setBusy(false)
+          }}
+        />
+      )}
     </div>
   )
 }
 
+/** Чат, у який пишуть задачі: останній результат і самі задачі. */
+function ChatCard({ chat, jobs, now, row }: { chat: JobChatInfo; jobs: Job[]; now: number; row: (j: Job) => ReactNode }) {
+  return (
+    <div className="chat-card">
+      <a className="chat-card-head" href={`/c/${chat.id}`} onClick={(e) => openChat(e, chat.id)}>
+        <span className="chat-card-icon">
+          <MessageSquare size={18} />
+        </span>
+        <span className="chat-card-title">{chat.title}</span>
+        {chat.last && <span className="chat-card-time">{relative(new Date(chat.last.at).toISOString(), now)}</span>}
+        <ChevronRight size={18} className="chat-card-go" />
+      </a>
+      <a className="chat-card-last" href={`/c/${chat.id}`} onClick={(e) => openChat(e, chat.id)}>
+        {chat.last ? chat.last.text : 'Ще нічого не надсилали — перше повідомлення прийде після запуску задачі.'}
+      </a>
+      <div className="job-rows">{jobs.map(row)}</div>
+    </div>
+  )
+}
+
+/** Згортувана група (службові, виконані). */
+function Fold({ title, hint, count, children }: { title: string; hint: string; count: number; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <section className={`jobs-section jobs-fold ${open ? 'is-open' : ''}`}>
+      <button type="button" className="jobs-fold-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span>
+          <b>{title}</b> · {count}
+        </span>
+        <span className="jobs-fold-hint">{hint}</span>
+        <ChevronDown size={18} className="jobs-fold-chevron" />
+      </button>
+      {open && <div className="job-list">{children}</div>}
+    </section>
+  )
+}
+
+const nextAt = (j: Job) => (j.next_run_at ? new Date(j.next_run_at).getTime() : Infinity)
+const byNext = (a: Job, b: Job) => Number(jobStatus(a) === 'paused') - Number(jobStatus(b) === 'paused') || nextAt(a) - nextAt(b)
+
 function JobsList({ go, sidebarOpen, openSidebar, flash }: Props) {
   const [jobs, setJobs] = useState<Job[] | null>(null)
+  const [chats, setChats] = useState<JobChatInfo[]>([])
+  const [moving, setMoving] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
   const now = useTick()
-  const load = useCallback(() => api.jobs().then(setJobs).catch(flash), [flash])
+  const load = useCallback(
+    () =>
+      Promise.all([api.jobChats().then(setChats), api.jobs().then(setJobs)]).catch(flash),
+    [flash],
+  )
   useEffect(() => {
     void load()
     const t = setInterval(() => void load(), 60_000)
@@ -180,15 +224,32 @@ function JobsList({ go, sidebarOpen, openSidebar, flash }: Props) {
   }, [load])
 
   const groups = useMemo(() => {
-    const by = { active: [] as Job[], paused: [] as Job[], done: [] as Job[] }
+    const chatIds = new Set(chats.map((c) => c.id))
+    const byChat = new Map<string, Job[]>()
+    const elsewhere = new Map<string, Job[]>()
+    const service: Job[] = []
+    const done: Job[] = []
+    let active = 0
+    let paused = 0
     for (const j of jobs ?? []) {
       const s = jobStatus(j)
-      by[s === 'paused' ? 'paused' : s === 'done' ? 'done' : 'active'].push(j)
+      if (s === 'done') {
+        done.push(j)
+        continue
+      }
+      if (s === 'paused') paused++
+      else active++
+      if (j.chatId && chatIds.has(j.chatId)) byChat.set(j.chatId, [...(byChat.get(j.chatId) ?? []), j])
+      else if (j.no_agent || (j.deliver || 'local') === 'local') service.push(j)
+      else {
+        const label = deliverLabel(j)
+        elsewhere.set(label, [...(elsewhere.get(label) ?? []), j])
+      }
     }
-    const next = (j: Job) => (j.next_run_at ? new Date(j.next_run_at).getTime() : Infinity)
-    by.active.sort((a, b) => next(a) - next(b))
-    return by
-  }, [jobs])
+    for (const list of [...byChat.values(), ...elsewhere.values(), service]) list.sort(byNext)
+    done.sort((a, b) => (b.last_run_at ?? '').localeCompare(a.last_run_at ?? ''))
+    return { byChat, elsewhere: [...elsewhere.entries()], service, done, active, paused }
+  }, [jobs, chats])
 
   const toggle = async (job: Job, on: boolean) => {
     try {
@@ -199,7 +260,42 @@ function JobsList({ go, sidebarOpen, openSidebar, flash }: Props) {
     }
   }
 
-  const soonest = groups.active.find((j) => j.next_run_at)
+  /** Перенести задачу в окремий чат: далі вона пише туди, а не в Telegram. */
+  const moveToChat = async (job: Job) => {
+    setMoving(job.id)
+    try {
+      await api.updateJob(job.id, { deliver: 'webchat:new' })
+      await load()
+      setNotice(`«${job.name}» тепер пише в окремий чат`)
+      setTimeout(() => setNotice(''), 3000)
+    } catch (e) {
+      flash(e)
+    } finally {
+      setMoving(null)
+    }
+  }
+
+  const row = (j: Job, extra?: ReactNode) => (
+    <JobRow key={j.id} job={j} now={now} onOpen={() => go({ kind: 'job', id: j.id })} onToggle={(on) => toggle(j, on)} extra={extra} />
+  )
+  const moveButton = (j: Job) => (
+    <button
+      type="button"
+      className="job-move"
+      disabled={moving != null}
+      title="Результати приходитимуть в окремий чат замість поточного місця"
+      onClick={(e) => {
+        e.stopPropagation()
+        void moveToChat(j)
+      }}
+    >
+      {moving === j.id ? <Loader2 size={14} className="spin" /> : <MessageSquarePlus size={14} />}
+      <span>У чат</span>
+    </button>
+  )
+
+  const soonest = (jobs ?? []).filter((j) => jobStatus(j) === 'active' && j.next_run_at).sort(byNext)[0]
+  const chatCards = chats.filter((c) => groups.byChat.has(c.id))
   return (
     <>
       <TopBar
@@ -221,7 +317,7 @@ function JobsList({ go, sidebarOpen, openSidebar, flash }: Props) {
                 ? 'Завантажую задачі Hermes…'
                 : jobs.length === 0
                   ? 'Задачі, які Hermes виконує сам за розкладом.'
-                  : `${groups.active.length} активних${groups.paused.length ? ` · ${groups.paused.length} на паузі` : ''}${soonest ? ` · наступна ${nextRun(soonest.next_run_at, now)}` : ''}`}
+                  : `${groups.active} активних${groups.paused ? ` · ${groups.paused} на паузі` : ''}${soonest ? ` · наступна ${nextRun(soonest.next_run_at, now)}` : ''}`}
             </p>
           </div>
           {jobs == null && (
@@ -234,35 +330,54 @@ function JobsList({ go, sidebarOpen, openSidebar, flash }: Props) {
               <div className="jobs-empty-icon">
                 <CalendarClock size={30} />
               </div>
-              <p>Ще немає жодної задачі. Попроси Hermes нагадувати, перевіряти чи збирати щось регулярно.</p>
+              <p>Ще немає жодної задачі. Попроси Hermes у будь-якому чаті нагадувати, перевіряти чи збирати щось регулярно — або створи її тут.</p>
               <button type="button" className="btn btn-primary" onClick={() => go({ kind: 'new' })}>
                 <Plus size={16} /> Нова задача
               </button>
             </div>
           )}
-          {(
-            [
-              ['active', 'Активні'],
-              ['paused', 'На паузі'],
-              ['done', 'Виконані'],
-            ] as const
-          ).map(([key, label]) =>
-            groups[key].length ? (
-              <section key={key} className="jobs-section">
-                <h2>{label}</h2>
+          {jobs != null && jobs.length > 0 && (
+            <section className="jobs-section">
+              <h2>Чати</h2>
+              {chatCards.length ? (
                 <div className="jobs-grid">
-                  {groups[key].map((j) => (
-                    <JobCard key={j.id} job={j} now={now} onOpen={() => go({ kind: 'job', id: j.id })} onToggle={(on) => toggle(j, on)} />
+                  {chatCards.map((c) => (
+                    <ChatCard key={c.id} chat={c} jobs={groups.byChat.get(c.id)!} now={now} row={(j) => row(j)} />
                   ))}
                 </div>
-              </section>
-            ) : null,
+              ) : (
+                <div className="jobs-tip">
+                  <MessageSquare size={20} />
+                  <p>
+                    Задача може писати в окремий чат: результати збираються в одній розмові, їх можна розпитати, а саму задачу змінити чи
+                    вимкнути словами. Натисни «У чат» біля задачі нижче або створи нову.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+          {groups.elsewhere.map(([label, list]) => (
+            <section key={label} className="jobs-section">
+              <h2>{label}</h2>
+              <div className="job-list">{list.map((j) => row(j, moveButton(j)))}</div>
+            </section>
+          ))}
+          {groups.service.length > 0 && (
+            <Fold title="Службові" hint="скрипти й задачі без сповіщень" count={groups.service.length}>
+              {groups.service.map((j) => row(j))}
+            </Fold>
+          )}
+          {groups.done.length > 0 && (
+            <Fold title="Виконані" hint="одноразові, що вже відпрацювали" count={groups.done.length}>
+              {groups.done.map((j) => row(j))}
+            </Fold>
           )}
         </div>
       </div>
       <button type="button" className="fab only-narrow" onClick={() => go({ kind: 'new' })} aria-label="Нова задача">
         <Plus size={24} />
       </button>
+      {notice && <div className="toast toast-ok">{notice}</div>}
     </>
   )
 }
@@ -409,7 +524,7 @@ function formOf(job: Job | null): Form {
     name: job?.name ?? '',
     prompt: job?.prompt ?? '',
     draft: toDraft(job?.schedule),
-    deliver: job?.deliver ?? 'webchat',
+    deliver: job?.deliver ?? 'webchat:new',
     repeat: job?.repeat.times ?? null,
   }
 }
@@ -420,6 +535,7 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
   const [form, setForm] = useState<Form>(() => formOf(null))
   const [saved, setSaved] = useState<Form>(() => formOf(null))
   const [runs, setRuns] = useState<JobRun[] | null>(null)
+  const [chats, setChats] = useState<JobChatInfo[]>([])
   const [busy, setBusy] = useState<string>('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [notice, setNotice] = useState('')
@@ -427,9 +543,16 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
   const now = useTick()
 
   useEffect(() => {
+    api.jobChats().then(setChats).catch(() => {})
     if (!id) return
+    // Спершу чати: цей запит оновлює на сервері зв'язки задач із чатами, тож chatId задачі буде свіжим.
     api
-      .job(id)
+      .jobChats()
+      .catch(() => [] as JobChatInfo[])
+      .then((c) => {
+        setChats(c)
+        return api.job(id)
+      })
       .then((j) => {
         setJob(j)
         setForm(formOf(j))
@@ -469,7 +592,12 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
       if (JSON.stringify(form.draft) !== JSON.stringify(saved.draft)) patch.schedule = body.schedule
       if (form.deliver !== saved.deliver) patch.deliver = body.deliver
       if (form.repeat !== saved.repeat) patch.repeat = body.repeat
-      const updated = await api.updateJob(job.id, patch)
+      let updated = await api.updateJob(job.id, patch)
+      if (patch.deliver) {
+        // Новий чат чи інше місце: перечитати зв'язок задачі з чатом.
+        setChats(await api.jobChats())
+        updated = await api.job(job.id)
+      }
       setJob(updated)
       setForm(formOf(updated))
       setSaved(formOf(updated))
@@ -523,10 +651,11 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
     )
   }
 
+  const linked = job?.chatId ? chats.find((c) => c.id === job.chatId) : undefined
   const deliverOptions = [
-    { v: 'webchat', label: 'Веб-чат' },
+    ...(linked && job ? [{ v: job.deliver, label: `Чат «${linked.title}»` }] : []),
+    { v: 'webchat:new', label: linked ? 'Новий чат' : 'Окремий чат' },
     { v: 'telegram', label: 'Telegram' },
-    { v: 'webchat,telegram', label: 'Обидва' },
     ...(job?.origin?.platform && !['telegram', 'api_server', 'local'].includes(job.origin.platform) ? [{ v: 'origin', label: deliverLabel({ deliver: 'origin', origin: job.origin }) }] : []),
     { v: 'local', label: 'Лише зберігати' },
   ]
@@ -650,6 +779,12 @@ function JobPage({ route, go, sidebarOpen, openSidebar, flash }: Props) {
                 </button>
               ))}
             </div>
+            {form.deliver === 'webchat:new' && (
+              <span className="field-hint">
+                {job ? 'Після збереження' : 'Після створення'} з'явиться чат «{form.name.trim() || 'Задача'}» у групі «Задачі». Туди приходитимуть
+                результати, і там можна попросити змінити чи вимкнути задачу.
+              </span>
+            )}
             {form.draft.mode !== 'once' && (
               <div className="field-inline repeat-row">
                 <span>Повторів</span>
