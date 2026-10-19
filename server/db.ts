@@ -73,8 +73,11 @@ db.exec(`
   );
 `)
 
-// Міграції: двигун чату (api — старий Runs API, native — рідний протокол gateway) і стан автоматизацій.
-for (const sql of [
+// ---------- Міграції ----------
+// Версія схеми — у PRAGMA user_version. Кожна міграція виконується раз, у транзакції; нові дописуються в кінець.
+// Версія 1 — усе, що бази до версіонування отримували «спробою» (тому там ігноруємо «колонка вже є»).
+
+const LEGACY = [
   `ALTER TABLE chats ADD COLUMN engine TEXT NOT NULL DEFAULT 'api'`,
   `ALTER TABLE chats ADD COLUMN control TEXT`,
   `ALTER TABLE chats ADD COLUMN mode TEXT NOT NULL DEFAULT 'auto'`,
@@ -85,13 +88,38 @@ for (const sql of [
   `CREATE TABLE IF NOT EXISTS link_previews (url TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS shares (token TEXT PRIMARY KEY, chat_id TEXT NOT NULL UNIQUE, upto INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, expires_at INTEGER NOT NULL, ua TEXT NOT NULL DEFAULT '', ip TEXT NOT NULL DEFAULT '')`,
-]) {
-  try {
-    db.exec(sql)
-  } catch {
-    /* колонка вже є */
+]
+
+const MIGRATIONS: (() => void)[] = [
+  () => {
+    for (const sql of LEGACY) {
+      try {
+        db.exec(sql)
+      } catch (err) {
+        if (!/duplicate column/i.test((err as Error).message)) throw err
+      }
+    }
+  },
+]
+
+function migrate() {
+  const current = Number((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version)
+  if (current > MIGRATIONS.length) {
+    throw new Error(`База даних новіша за цю версію чату (схема ${current}, підтримується до ${MIGRATIONS.length}). Онови чат.`)
+  }
+  for (let v = current; v < MIGRATIONS.length; v++) {
+    db.exec('BEGIN')
+    try {
+      MIGRATIONS[v]!()
+      db.exec(`PRAGMA user_version = ${v + 1}`)
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw err
+    }
   }
 }
+migrate()
 
 type Row = Record<string, unknown>
 const str = (v: unknown) => (v == null ? '' : String(v))

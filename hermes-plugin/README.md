@@ -1,3 +1,21 @@
+# Hermes plugin «webchat»
+
+*English summary.* Makes Hermes Chat a delivery target in Hermes, like Telegram: scheduled-task results and the
+`send_message` tool arrive in the chat as messages with a push notification. Conversations themselves use the
+native gateway protocol and do not need this plugin.
+
+```sh
+npm run setup:hermes        # from the chat directory; the chat must have started once (it creates the hook key)
+hermes gateway restart
+hermes send -t webchat:Test "hello"
+```
+
+Channels: `webchat:<chat id>` — a specific conversation (this is how tasks created from a chat are linked),
+`webchat:<name>` — a chat with that title (created on demand), `webchat` — the default chat. Settings live in
+`config.json` next to `adapter.py` (written by the installer) or `WEBCHAT_*` variables in `~/.hermes/.env`.
+
+---
+
 # Плагін Hermes «webchat»
 
 Робить веб-чат адресою доставки Hermes, як Telegram. Лише надсилання: результати задач за розкладом

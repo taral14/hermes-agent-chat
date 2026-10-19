@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import {
+  CONFIG_FILE,
   HERMES_AGENT_DIR,
   HERMES_HOME,
   HERMES_PYTHON,
@@ -38,8 +39,8 @@ if (existsSync(join(ROOT, 'node_modules'))) ok('залежності встан�
 else fail('немає node_modules', 'npm ci')
 if (existsSync(join(ROOT, 'dist', 'index.html'))) ok('інтерфейс зібрано')
 else fail('інтерфейс не зібрано', 'npm run build')
-const cfgFile = join(ROOT, 'config.yaml')
-if (!existsSync(cfgFile)) fail('немає config.yaml (логін і пароль)', 'cp config.example.yaml config.yaml і задай свій пароль')
+const cfgFile = CONFIG_FILE
+if (!existsSync(cfgFile)) fail(`немає ${cfgFile} (логін і пароль)`, 'npm run setup')
 else {
   const c = parseYaml(readFileSync(cfgFile, 'utf8')) as { username?: string; password?: string } | null
   if (!c?.username || !c?.password) fail('у config.yaml немає username чи password', 'задай обидва поля')

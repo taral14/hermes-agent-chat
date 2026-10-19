@@ -4,12 +4,11 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage } from 'node:http'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { ROOT } from './config.ts'
+import { CONFIG_FILE } from './config.ts'
 import { DATA_DIR, createLoginSession, getLoginSession, getSetting, setSetting, touchLoginSession } from './db.ts'
 import { HttpError, clientIp } from './http.ts'
 
 const SESSION_DAYS = 90
-const CONFIG_FILE = join(ROOT, 'config.yaml')
 
 type Config = { username: string; password: string; allowPassword: boolean }
 let configCache: { mtime: number; value: Config } | null = null

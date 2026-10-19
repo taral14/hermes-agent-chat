@@ -8,6 +8,8 @@ const env = (k: string) => process.env[k]?.trim() || undefined
 const expand = (p: string) => p.replace(/^~(?=$|\/)/, homedir())
 
 export const ROOT = resolve(import.meta.dirname, '..')
+/** Логін і пароль єдиного користувача. За замовчуванням config.yaml поруч із package.json. */
+export const CONFIG_FILE = expand(env('CHAT_CONFIG') ?? join(ROOT, 'config.yaml'))
 export const PORT = Number(env('PORT') ?? 5190)
 /** На якій адресі слухати. За замовчуванням лише цей комп'ютер: назовні — через проксі чи тунель з HTTPS. */
 export const BIND_HOST = env('BIND_HOST') ?? '127.0.0.1'

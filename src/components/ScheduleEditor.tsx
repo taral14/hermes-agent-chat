@@ -5,6 +5,15 @@ import { api } from '../api.ts'
 import { DAYS, type Draft, MODES, describeDraft, draftValid, fromDraft } from '../schedule.ts'
 
 type Zone = { timezone: string; configured: boolean }
+
+/** Один пояс може мати кілька назв (Europe/Kyiv і Europe/Kiev): порівнюємо канонічну. */
+function canonical(tz: string): string {
+  try {
+    return new Intl.DateTimeFormat('en', { timeZone: tz }).resolvedOptions().timeZone
+  } catch {
+    return tz
+  }
+}
 let zone: Promise<Zone | null> | null = null
 
 /**
@@ -31,7 +40,7 @@ function ZoneNote() {
       </div>
     )
   }
-  if (z.timezone === local) return null
+  if (canonical(z.timezone) === canonical(local)) return null
   return (
     <div className="sched-zone">
       <Globe size={14} /> Час за поясом Hermes: {z.timezone}
