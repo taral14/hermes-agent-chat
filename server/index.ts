@@ -107,7 +107,7 @@ import {
   onCronChanged,
 } from './native.ts'
 import { gateway } from './gateway.ts'
-import { VAPID_PUBLIC, hermesDelivered, jobsWatched, sendTest, setPresence } from './push.ts'
+import { VAPID_PUBLIC, hermesDelivered, sendTest, setPresence } from './push.ts'
 import { hookTokenOk, receiveFromHermes } from './inbox.ts'
 import { chatForJob, jobsForChat, refreshJobLinks } from './jobLinks.ts'
 import {
@@ -1280,11 +1280,12 @@ const server = createServer(async (req, res) => {
   }
 })
 
-// Роутер (якщо чат запущено за ним) зупиняє сервер після простою. Поки Hermes працює над задачею або стежимо
-// за розкладом, стукаємо до себе через роутер, щоб не пропустити подію і пуш. Без роутера це не потрібно.
+// Роутер (якщо чат запущено за ним) зупиняє сервер після простою. Поки Hermes працює над задачею, стукаємо до себе
+// через роутер, щоб не пропустити подію і пуш. Без роутера це не потрібно. Результати розкладу Hermes приносить сам
+// (плагін webchat) — роутер підніме чат на цей запит.
 if (!DEV && ROUTER_URL) {
   setInterval(() => {
-    if (!activeRunCount() && !jobsWatched()) return
+    if (!activeRunCount()) return
     const r = httpRequest(`${ROUTER_URL}/api/ping`, { headers: { Host: PUBLIC_HOST }, timeout: 10_000 }, (res) => res.resume())
     r.on('error', () => {})
     r.on('timeout', () => r.destroy())

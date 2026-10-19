@@ -2,10 +2,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import webpush from 'web-push'
-import type { Job, Message, Part } from '../src/shared.ts'
+import type { Message, Part } from '../src/shared.ts'
 import { VAPID_SUBJECT } from './config.ts'
 import { DATA_DIR, type PushSub, deletePushSub, getChat, listPushSubs } from './db.ts'
-import { jobRuns, listJobs, runOutput } from './jobs.ts'
 
 const VAPID_FILE = join(DATA_DIR, '.vapid.json')
 
@@ -127,49 +126,3 @@ export function promptRaised(m: Message, p: Extract<Part, { type: 'approval' | '
     )
   }
 }
-
-// ---------- Задачі за розкладом ----------
-
-const lastSeen = new Map<string, string | null>()
-let primed = false
-
-export const jobsWatched = () => listPushSubs().some((s) => s.settings.jobs)
-
-/** Раз на хвилину дивимось, чи якась задача (не скрипт) щойно відпрацювала. */
-async function pollJobs() {
-  if (!jobsWatched()) {
-    primed = false
-    return
-  }
-  let jobs: Job[]
-  try {
-    jobs = await listJobs()
-  } catch {
-    return
-  }
-  for (const j of jobs) {
-    const prev = lastSeen.get(j.id)
-    lastSeen.set(j.id, j.last_run_at)
-    if (!primed || j.no_agent || !j.last_run_at || prev === j.last_run_at) continue
-    const failed = j.last_status && !/^(ok|success|completed|skipped)$/i.test(j.last_status)
-    // Успішний результат у веб-чат приносить сам Hermes (hermesDelivered) — другий пуш не потрібен.
-    if (!failed && /(^|,)\s*webchat\b/.test(j.deliver ?? '')) continue
-    let body = failed ? `⚠️ ${j.last_error ?? 'Помилка'}` : 'Виконано'
-    if (!failed) {
-      try {
-        const [run] = await jobRuns(j.id, 1)
-        const out = run ? await runOutput(run.sessionId) : ''
-        // [SILENT] — задача вирішила нічого не повідомляти, Hermes теж нічого не доставляє.
-        if (/^\s*\[SILENT\]/i.test(out)) continue
-        body = plain(out) || body
-      } catch {
-        /* без тексту */
-      }
-    }
-    void send('jobs', { title: `${failed ? 'Не вдалося' : 'Розклад'} · ${j.name}`, body, url: `/jobs/${j.id}`, tag: `job-${j.id}` })
-  }
-  primed = true
-}
-
-setInterval(() => void pollJobs(), 60_000).unref()
-setTimeout(() => void pollJobs(), 5_000).unref()

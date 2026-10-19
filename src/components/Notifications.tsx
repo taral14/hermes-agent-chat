@@ -175,7 +175,7 @@ export function Notifications({ onClose }: { onClose: () => void }) {
               <Row
                 icon={<CalendarClock size={18} />}
                 title="Розклад"
-                hint="Задача за розкладом виконалась або впала (крім службових скриптів)"
+                hint="Hermes надіслав у чат результат задачі за розкладом"
                 on={settings.jobs}
                 onChange={(v) => toggle('jobs', v)}
               />
