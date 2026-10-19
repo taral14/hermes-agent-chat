@@ -46,7 +46,7 @@
 ## Встановлення
 
 ```sh
-git clone https://github.com/<you>/hermes-chat.git && cd hermes-chat
+git clone https://github.com/taral14/hermes-agent-chat.git && cd hermes-agent-chat
 npm ci
 npm run setup      # config.yaml з випадковим паролем (покаже один раз) і .env з прикладу
 npm run build

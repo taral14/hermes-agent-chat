@@ -49,7 +49,7 @@ version it was tested with, and `npm run doctor` warns when your Hermes is older
 ## Install
 
 ```sh
-git clone https://github.com/<you>/hermes-chat.git && cd hermes-chat
+git clone https://github.com/taral14/hermes-agent-chat.git && cd hermes-agent-chat
 npm ci
 npm run setup      # creates config.yaml with a random password (printed once) and .env from the example
 npm run build
@@ -94,7 +94,7 @@ On iPhone, push notifications work only for the app added to the Home Screen (Sh
   <key>Label</key><string>com.example.hermes-chat</string>
   <key>ProgramArguments</key>
   <array><string>/opt/homebrew/bin/npm</string><string>start</string></array>
-  <key>WorkingDirectory</key><string>/Users/you/hermes-chat</string>
+  <key>WorkingDirectory</key><string>/Users/you/hermes-agent-chat</string>
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
   <key>RunAtLoad</key><true/>
@@ -111,7 +111,7 @@ On iPhone, push notifications work only for the app added to the Home Screen (Sh
 
 ```ini
 [Service]
-WorkingDirectory=%h/hermes-chat
+WorkingDirectory=%h/hermes-agent-chat
 ExecStart=/usr/bin/npm start
 Restart=always
 [Install]

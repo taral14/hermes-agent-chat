@@ -1,5 +1,5 @@
 {
-  "name": "hermes-chat",
+  "name": "hermes-agent-chat",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -12,6 +12,12 @@
     "self-hosted",
     "pwa"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taral14/hermes-agent-chat.git"
+  },
+  "homepage": "https://github.com/taral14/hermes-agent-chat#readme",
+  "bugs": "https://github.com/taral14/hermes-agent-chat/issues",
   "scripts": {
     "dev": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/index.ts",
     "build": "tsc -b && vite build",
