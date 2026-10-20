@@ -26,6 +26,7 @@ Hermes ── webchat plugin ──POST /api/hooks/hermes─┘  (scheduled-task
 | `hermes.ts`, `jobs.ts` | Client for the Hermes HTTP API (models, session titles, scheduled jobs and their runs) |
 | `plugins.ts` | Plugins = Hermes MCP servers: catalog, install, enable/disable, OAuth sign-in, `reload.mcp` |
 | `extensions.ts`, `skills.ts` | Hermes code plugins (`plugins.manage`, catalog over HTTP) and skills (hub, toggle, install) |
+| `translate.ts` + `translate.py` | "Translate" for English catalog texts: Hermes' auxiliary model, cached in `translations` |
 | `hermesApi.ts` | Calls to the gateway's HTTP routes through the bridge, Hermes errors → HTTP errors |
 | `jobLinks.ts` | Which scheduled job delivers into which chat (`deliver=webchat:<chat id>`) |
 | `inbox.ts` | Messages Hermes sends on its own (plugin hook), job chats |
@@ -75,6 +76,11 @@ to `~/.hermes/.env` via `PUT /api/env`, limited to names the plugin itself decla
 (installed, including disabled), `/api/skills/hub/official` and `/hub/search`, `skills.manage install` (the scan
 verdict comes back synchronously) and `/api/skills/toggle`; uninstall is a Hermes background action the server
 waits for.
+
+Catalog descriptions are in English, so cards offer **Translate**. `translate.py` calls Hermes' auxiliary model
+(`call_llm`, the one that writes session titles) as a one-off process in Hermes' own runtime — the command comes
+from `hermes --print-runtime-command`, with our script in place of the CLI module. Each text is translated once
+and kept in the `translations` table.
 
 ### Long tasks survive closed tabs
 

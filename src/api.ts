@@ -74,6 +74,7 @@ export const api = {
   pluginFlow: (id: string) => req<PluginAuthFlow>('GET', `/api/plugins/flows/${id}`),
   finishPluginFlow: (id: string, url: string) => req<PluginAuthFlow>('POST', `/api/plugins/flows/${id}/callback`, { url }),
   cancelPluginFlow: (id: string) => req('DELETE', `/api/plugins/flows/${id}`),
+  translate: (texts: string[]) => req<{ translations: string[] }>('POST', '/api/translate', { texts }),
   extensions: () => req<Extension[]>('GET', '/api/extensions'),
   extension: (name: string) => req<Extension>('GET', `/api/extensions/${encodeURIComponent(name)}`),
   installExtension: (name: string) => req<ExtensionResult>('POST', `/api/extensions/${encodeURIComponent(name)}/install`),

@@ -5,6 +5,7 @@ import { BRAND_ICONS, POPULAR, STATUS_TEXT, isSecretField, matches, pluginSubtit
 import { navigateTo, pluginsUrl } from '../../router.ts'
 import { plural } from '../../schedule.ts'
 import type { Plugin, PluginAuthFlow, PluginTest } from '../../shared.ts'
+import { Translatable } from '../Translatable.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { Switch } from '../ui/Switch.tsx'
 import { Empty, LoadState, Row, Section, type TabProps, message, useLoad } from './ui.tsx'
@@ -250,7 +251,7 @@ function PluginSheet({ plugin: p, onClose, reload }: { plugin: Plugin; onClose: 
       <div className="plugin-head">
         <PluginIcon plugin={p} size={64} />
         <div>
-          <p className="plugin-head-sub">{pluginSubtitle(p)}</p>
+          <Translatable text={pluginSubtitle(p)} className="plugin-head-sub" />
           {p.installed && p.status && (
             <span className={`plugin-state ${dotClass(p)}`}>
               {STATUS_TEXT[p.status]}

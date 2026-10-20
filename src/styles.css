@@ -6566,3 +6566,24 @@ a.job-action {
   color: var(--text);
   white-space: pre-wrap;
 }
+
+.translatable {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.translate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.translate-btn:hover:not(:disabled) {
+  color: var(--text);
+}

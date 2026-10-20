@@ -100,6 +100,8 @@ const MIGRATIONS: (() => void)[] = [
       }
     }
   },
+  // 2: переклади описів (ключ — хеш мови й тексту), щоб кожен текст перекладати один раз.
+  () => db.exec(`CREATE TABLE translations (key TEXT PRIMARY KEY, text TEXT NOT NULL, created_at INTEGER NOT NULL)`),
 ]
 
 function migrate() {
@@ -461,6 +463,20 @@ export function setSetting(key: string, value: string) {
 }
 
 // ---------- Попередній перегляд посилань ----------
+
+export function getTranslations(keys: string[]): Map<string, string> {
+  const out = new Map<string, string>()
+  const q = db.prepare('SELECT text FROM translations WHERE key = ?')
+  for (const k of keys) {
+    const r = q.get(k) as { text: string } | undefined
+    if (r) out.set(k, r.text)
+  }
+  return out
+}
+
+export function saveTranslation(key: string, text: string) {
+  db.prepare('INSERT INTO translations (key, text, created_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET text = excluded.text').run(key, text, Date.now())
+}
 
 export function getLinkPreview(url: string): { data: string; fetchedAt: number } | null {
   const r = db.prepare('SELECT data, fetched_at FROM link_previews WHERE url = ?').get(url)

@@ -5,6 +5,7 @@ import { pluginTitle } from '../../plugins.ts'
 import { plural } from '../../schedule.ts'
 import type { Skill } from '../../shared.ts'
 import { Markdown } from '../Markdown.tsx'
+import { Translatable } from '../Translatable.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { Switch } from '../ui/Switch.tsx'
 import { Chips, Empty, LetterIcon, Limited, LoadState, Row, Section, type TabProps, message, useLoad } from './ui.tsx'
@@ -207,7 +208,7 @@ function SkillSheet({ skill: s, onClose }: { skill: Skill; onClose: () => void }
         {s.category && <span className="plugin-badge">{categoryLabel(s.category)}</span>}
         {s.usage > 0 && <span className="plugin-badge">Використана {s.usage} {plural(s.usage, 'раз', 'рази', 'разів')}</span>}
       </div>
-      {s.description && <p className="plugin-desc">{s.description}</p>}
+      {s.description && <Translatable text={s.description} className="plugin-desc" />}
 
       {!state.installed &&
         (confirm === 'install' ? (

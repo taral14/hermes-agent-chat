@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../../api.ts'
 import { pluginTitle } from '../../plugins.ts'
 import type { Extension, ExtensionSetting } from '../../shared.ts'
+import { Translatable } from '../Translatable.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { Switch } from '../ui/Switch.tsx'
 import { Chips, Empty, ImageIcon, Limited, LoadState, Row, Section, type TabProps, message, useLoad } from './ui.tsx'
@@ -242,11 +243,9 @@ function ExtensionSheet({ name, onClose }: { name: string; onClose: () => void }
           {ext.installed && <span className={`plugin-state ${ext.status === 'enabled' ? 'is-ok' : 'is-off'}`}>{stateText(ext)}</span>}
         </div>
       </div>
-      {ext.description && <p className="plugin-desc">{ext.description}</p>}
+      {ext.description && <Translatable text={ext.description} className="plugin-desc" />}
       {ext.knownIssues.map((k) => (
-        <p key={k} className="plugin-warn">
-          {k}
-        </p>
+        <Translatable key={k} text={k} className="plugin-warn" />
       ))}
       {ext.docs && (
         <a className="plugin-docs" href={ext.docs} target="_blank" rel="noreferrer">

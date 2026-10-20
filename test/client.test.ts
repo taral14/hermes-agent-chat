@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { emit, on } from '../src/bus.ts'
 import { linkifyNotes } from '../src/kb.ts'
+import { looksEnglish } from '../src/lang.ts'
 import { matches, pluginTitle } from '../src/plugins.ts'
 import { chatUrl, jobsUrl, kbUrl, parseRoute, pluginsUrl } from '../src/router.ts'
 import type { KbNote, Plugin } from '../src/shared.ts'
@@ -34,6 +35,11 @@ describe('плагіни', () => {
     assert.equal(pluginTitle('notion'), 'Notion')
     assert.equal(pluginTitle('n8n-official'), 'n8n')
     assert.equal(pluginTitle('local-youtube-stt'), 'Local youtube stt')
+  })
+  test('кнопку «Перекласти» мають лише англійські тексти', () => {
+    assert.ok(looksEnglish('Pages and databases from your Notion workspace.'))
+    assert.ok(!looksEnglish('Озвучення українською (HolosTTS).'))
+    assert.ok(!looksEnglish('MCP 2.0'))
   })
   test('пошук за назвою, описом і доменом', () => {
     const p = { name: 'hugging_face', description: 'Models and datasets', host: 'huggingface.co' } as Plugin

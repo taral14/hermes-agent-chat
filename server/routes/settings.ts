@@ -11,6 +11,7 @@ import { type Ctx, HttpError, readJson, send } from '../http.ts'
 import { commandCatalog } from '../native.ts'
 import { chatPrefs, updateChatPrefs } from '../prefs.ts'
 import { setPresence } from '../push.ts'
+import { translate } from '../translate.ts'
 import { unfurl } from '../unfurl.ts'
 import { vaultInfo } from '../vault.ts'
 
@@ -78,6 +79,12 @@ export async function settingsRoutes({ req, res, url, path, method }: Ctx): Prom
     const target = url.searchParams.get('url') ?? ''
     if (!/^https?:\/\//i.test(target) || target.length > 2000) throw new HttpError(400, 'Некоректне посилання')
     return send(res, 200, await unfurl(target), { 'Cache-Control': 'private, max-age=3600' })
+  }
+  // Переклад описів (каталоги Hermes англійською) допоміжною моделлю Hermes; див. translate.ts.
+  if (path === '/api/translate' && method === 'POST') {
+    const { texts } = await readJson<{ texts?: unknown }>(req)
+    if (!Array.isArray(texts) || !texts.length || !texts.every((t) => typeof t === 'string')) throw new HttpError(400, 'Потрібно texts')
+    return send(res, 200, { translations: await translate(texts as string[]) })
   }
   if (path === '/api/presence' && method === 'POST') {
     const b = await readJson<{ clientId?: string; visible?: boolean; chatId?: string | null }>(req)
