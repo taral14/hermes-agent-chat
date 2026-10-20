@@ -55,7 +55,15 @@ function YouTubeCard({ url, p }: { url: string; p: LinkPreview | null }) {
     <div className={`yt-card ${yt.short ? 'is-short' : ''}`}>
       <div className="yt-frame">
         {playing ? (
-          <iframe src={src} title={p?.title ?? 'YouTube'} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
+          // YouTube не грає вбудоване відео без Referer (помилка 153), а сторінка чату віддає його лише своїм:
+          // для цього фрейму — тільки домен чату, без шляху.
+          <iframe
+            src={src}
+            title={p?.title ?? 'YouTube'}
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
         ) : (
           <button type="button" className="yt-thumb" aria-label="Відтворити відео" onClick={() => setPlaying(true)}>
             <img

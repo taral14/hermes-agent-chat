@@ -6789,3 +6789,20 @@ body.viewer-open {
   margin-right: 8px;
   color: var(--text-2);
 }
+
+/* Новий чат на телефоні: поле вводу внизу, як і в розмові (і як у застосунках ChatGPT і Claude). Висота
+   застосунку = видима область (--app-h), тож клавіатура підхоплює поле, а після першого повідомлення
+   воно лишається на тому самому місці. */
+@media (max-width: 768px) {
+  .welcome {
+    justify-content: flex-end;
+    padding: 0 8px;
+  }
+  .welcome-title {
+    margin: auto 0;
+    padding: 0 16px;
+  }
+  .welcome .composer-hint {
+    display: block;
+  }
+}
