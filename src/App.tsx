@@ -16,6 +16,7 @@ import { Settings } from './components/Settings.tsx'
 import { ShareSheet } from './components/ShareSheet.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { useChats } from './hooks/useChats.ts'
+import { holdKeyboard } from './keyboard.ts'
 import { kb, obsidianUriToPath } from './kb.ts'
 import { reportPresence } from './push.ts'
 import { chatUrl, jobsUrl, kbUrl, navigateTo, pluginsUrl, useRoute } from './router.ts'
@@ -246,10 +247,15 @@ export default function App() {
   const setModel = (v: ModelChoice) => (current ? store.patchChat(current.id, { model: v }) : setNewModel(v))
   const setMode = (m: ChatMode) => (current ? store.patchChat(current.id, { mode: m }) : setNewMode(m))
 
+  /** Новий чат одразу з курсором у полі вводу (і відкритою клавіатурою на телефоні, див. keyboard.ts). */
   const newChat = (listId: string | null = null) => {
+    const release = holdKeyboard()
     setNewListId(listId)
     navigate(null)
-    setTimeout(() => composer.current?.focus(), 0)
+    setTimeout(() => {
+      composer.current?.focus()
+      release()
+    }, 50)
   }
 
   // Чати старої версії (до рідного протоколу Hermes) лишаються лише для читання.
