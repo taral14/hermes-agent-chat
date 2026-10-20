@@ -2,6 +2,7 @@ import { Check, ExternalLink, Loader2, Plus, RefreshCw, Trash2, Wrench } from 'l
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, unfurl } from '../../api.ts'
 import { BRAND_ICONS, POPULAR, STATUS_TEXT, isSecretField, matches, pluginSubtitle, pluginTitle } from '../../plugins.ts'
+import { navigateTo, pluginsUrl } from '../../router.ts'
 import { plural } from '../../schedule.ts'
 import type { Plugin, PluginAuthFlow, PluginTest } from '../../shared.ts'
 import { Sheet } from '../ui/Sheet.tsx'
@@ -346,7 +347,14 @@ function PluginSheet({ plugin: p, onClose, reload }: { plugin: Plugin; onClose: 
             </span>
             <Switch on={p.enabled} busy={busy === 'toggle'} disabled={!canEdit || (!!busy && busy !== 'toggle')} label="Увімкнено" onChange={(v) => void toggle(v)} />
           </div>
-          {p.fromPlugin && <p className="field-hint">Цей сервер додав плагін Hermes «{p.fromPlugin}»: керуй ним там.</p>}
+          {p.fromPlugin && (
+            <p className="field-hint">
+              Сервер приходить із плагіна «{p.fromPlugin}» у ~/.hermes/plugins: вмикати й прибирати його треба там.{' '}
+              <a href={pluginsUrl('extensions', p.fromPlugin)} onClick={(e) => (e.preventDefault(), navigateTo(pluginsUrl('extensions', p.fromPlugin!)))}>
+                Відкрити в розширеннях
+              </a>
+            </p>
+          )}
 
           <div className="plugin-actions">
             <button type="button" className="btn" disabled={!!busy || !p.enabled} onClick={() => void check()}>

@@ -138,6 +138,25 @@ hermes send -t webchat:Test "hello"
 
 See [`hermes-plugin/README.md`](hermes-plugin/README.md).
 
+### Your own MCP server as a plugin folder (optional)
+
+Hermes scans `~/.hermes/plugins/`: a folder there with `plugin.json` shows up in **Plugins → Extensions** as
+"in the folder, off" and turns on with one tap. For a local MCP server three files are enough:
+
+```
+~/.hermes/plugins/my-server/
+  plugin.json   {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                 "name": "my-server", "version": "1.0.0", "description": "What it does"}
+  mcp.json      {"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                 "mcpServers": {"my-server": {"type": "stdio", "command": "./run-mcp.sh", "env": {}}}}
+  run-mcp.sh    #!/bin/sh
+                exec /path/to/project/.venv/bin/python /path/to/project/server.py
+```
+
+The command must be a program on `PATH` or a `./` path inside the folder (Hermes rejects absolute paths there),
+hence the small `run-mcp.sh`; `chmod +x` it. A server named the same in `config.yaml` wins over the folder.
+Check a folder with `hermes plugins validate ~/.hermes/plugins/my-server`.
+
 ### Obsidian knowledge base (optional)
 
 The chat shows the vault from `OBSIDIAN_VAULT_PATH` in Hermes' `.env` (or `VAULT_PATH` in the chat's `.env`).

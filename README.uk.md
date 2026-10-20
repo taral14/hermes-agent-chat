@@ -102,6 +102,25 @@ hermes send -t webchat:Тест "привіт"
 
 Докладніше — [`hermes-plugin/README.md`](hermes-plugin/README.md).
 
+### Свій MCP-сервер текою-плагіном (необов'язково)
+
+Hermes сканує `~/.hermes/plugins/`: тека там із `plugin.json` з'являється в **Плагіни → Розширення** як
+«У папці, вимкнено» і вмикається одним дотиком. Для локального MCP-сервера досить трьох файлів:
+
+```
+~/.hermes/plugins/my-server/
+  plugin.json   {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                 "name": "my-server", "version": "1.0.0", "description": "Що робить"}
+  mcp.json      {"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                 "mcpServers": {"my-server": {"type": "stdio", "command": "./run-mcp.sh", "env": {}}}}
+  run-mcp.sh    #!/bin/sh
+                exec /шлях/до/проєкту/.venv/bin/python /шлях/до/проєкту/server.py
+```
+
+Команда має бути програмою з `PATH` або шляхом `./` усередині теки (абсолютні шляхи Hermes там не приймає),
+тому й маленький `run-mcp.sh`; не забудь `chmod +x`. Сервер з такою самою назвою в `config.yaml` важливіший за теку.
+Перевірити теку: `hermes plugins validate ~/.hermes/plugins/my-server`.
+
 ### База знань Obsidian (необов'язково)
 
 Чат показує сховище з `OBSIDIAN_VAULT_PATH` у `.env` Hermes (або `VAULT_PATH` у `.env` чату). На macOS служба
