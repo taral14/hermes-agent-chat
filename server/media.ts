@@ -1,10 +1,11 @@
 // Файли, які Hermes надсилає в чат: тег MEDIA:<шлях> (як у Telegram) або окремий рядок із шляхом до файлу.
 import { randomBytes } from 'node:crypto'
-import { constants, copyFileSync, existsSync, mkdirSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { constants, existsSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { copyFile, mkdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import type { Attachment } from '../src/shared.ts'
-import { DATA_DIR, UPLOAD_DIR, deleteUploadRow, insertUpload, orphanUploads } from './db.ts'
+import { DATA_DIR, UPLOAD_DIR, deleteUploadRow, insertUpload, orphanUploads, setUploadPath } from './db.ts'
 import { HERMES_HOME } from './config.ts'
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -158,24 +159,32 @@ export function extractMedia(text: string): { paths: string[]; text: string } {
 /**
  * Файл для чату. Невеликий копіюємо (на APFS це миттєвий клон), щоб він жив, навіть якщо Hermes його прибере.
  * Великий лишаємо на місці й пам'ятаємо шлях: завантажується оригінал за тимчасовим посиланням.
+ *
+ * Копія робиться у фоні, а до її готовності файл віддається з оригіналу. Синхронне копіювання блокувало
+ * весь сервер: macOS, наприклад, тримає open() у «Завантаженнях», поки на екрані не дозволять доступ.
  */
 export function importFile(path: string): Attachment {
   const id = randomBytes(9).toString('base64url')
   const size = statSync(path).size
-  if (size >= REF_FROM) {
-    const name = basename(path)
-    const a: Attachment = { id, name, mime: mimeOf(name), size, ref: true }
-    insertUpload({ ...a, path })
-    return a
-  }
-  const dir = join(UPLOAD_DIR, id)
-  mkdirSync(dir, { recursive: true })
   const name = basename(path)
-  const dest = join(dir, name)
-  copyFileSync(path, dest, constants.COPYFILE_FICLONE)
-  const a: Attachment = { id, name, mime: mimeOf(name), size: statSync(dest).size }
-  insertUpload({ ...a, path: dest })
+  const a: Attachment = { id, name, mime: mimeOf(name), size, ...(size >= REF_FROM ? { ref: true as const } : {}) }
+  insertUpload({ ...a, path })
+  if (!a.ref) void copyIn(id, path, name)
   return a
+}
+
+async function copyIn(id: string, path: string, name: string) {
+  const dir = join(UPLOAD_DIR, id)
+  try {
+    await mkdir(dir, { recursive: true })
+    const dest = join(dir, name)
+    await copyFile(path, dest, constants.COPYFILE_FICLONE)
+    // Чат могли видалити, поки йшла копія: тоді вона нікому не потрібна.
+    if (!setUploadPath(id, dest)) await rm(dir, { recursive: true, force: true })
+  } catch (err) {
+    console.warn(`[media] не вдалося скопіювати ${path}, лишається оригінал: ${(err as Error).message}`)
+    await rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
 }
 
 export function collectMedia(text: string): { attachments: Attachment[]; text: string } {

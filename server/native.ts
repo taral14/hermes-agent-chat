@@ -1,7 +1,7 @@
 // Двигун чату на рідному протоколі Hermes gateway: ті самі сесії, що в TUI/Desktop, слеш-команди,
 // перемотування історії (повтор/редагування), відгалуження, автоматизації (/goal, /loop, /heartbeat).
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, mkdirSync } from 'node:fs'
+import { copyFile, mkdir } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import type { Attachment, ChatControl, Message, ModelChoice, Part } from '../src/shared.ts'
 import {
@@ -162,15 +162,15 @@ function apiText(text: string, attachments: Attachment[], context = ''): string 
   return `[${chatInstructions()}]\n\n${context ? `${context}\n\n[Повідомлення користувача:]\n` : ''}${text || 'Подивись прикріплені файли.'}${files}`
 }
 
-/** Картинки Hermes бачить напряму, але бере їх лише зі своєї теки кешу. */
-function stageImages(attachments: Attachment[]) {
+/** Картинки Hermes бачить напряму, але бере їх лише зі своєї теки кешу. Копії асинхронні, як і в media.ts. */
+async function stageImages(attachments: Attachment[]) {
   const staged: { path: string; mime: string }[] = []
   for (const a of attachments) {
     const u = getUpload(a.id)
     if (!u || !IMAGE_MIMES.has(u.mime) || staged.length >= 10) continue
-    mkdirSync(IMAGE_STAGING, { recursive: true })
+    await mkdir(IMAGE_STAGING, { recursive: true })
     const dest = join(IMAGE_STAGING, `webchat-${newId()}${extname(u.name) || '.png'}`)
-    copyFileSync(u.path, dest)
+    await copyFile(u.path, dest)
     staged.push({ path: dest, mime: u.mime })
   }
   return staged
@@ -198,7 +198,7 @@ async function applyEffort(sessionId: string, effort: string | undefined) {
 async function submit(chat: ChatRow, assistant: MessageRow, user: MessageRow, text: string) {
   const sessionId = await ensureSession(chat)
   await applyEffort(sessionId, (chat.model as ModelChoice)?.effort)
-  const images = stageImages(user.attachments)
+  const images = await stageImages(user.attachments)
   awaiting.set(chat.id, assistant.id)
   const model = chat.model as ModelChoice
   const receipt = await gateway.rpc<{ admission_id: string; execution_generation?: number | null }>('prompt.submit', {

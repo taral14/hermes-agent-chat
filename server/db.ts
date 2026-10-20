@@ -594,6 +594,11 @@ export function orphanUploads(minAgeMs: number): UploadRow[] {
     .map((r) => ({ id: str(r.id), name: str(r.name), mime: str(r.mime), size: Number(r.size), path: str(r.path), ...(r.ref ? { ref: true } : {}) }))
 }
 
+/** Файл переїхав (фонова копія в сховище готова). Повертає, чи запис ще існує. */
+export function setUploadPath(id: string, path: string): boolean {
+  return Number(db.prepare('UPDATE uploads SET path = ? WHERE id = ?').run(path, id).changes) > 0
+}
+
 export function deleteUploadRow(id: string) {
   db.prepare('DELETE FROM uploads WHERE id = ?').run(id)
 }
