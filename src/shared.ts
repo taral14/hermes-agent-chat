@@ -173,6 +173,8 @@ export type ServerEvent =
   | { type: 'lists'; lists: ChatList[] }
   /** Hermes змінив нотатки в базі знань. */
   | { type: 'kb'; paths: string[] }
+  /** Hermes перепідключив MCP-сервери: стан плагінів змінився. */
+  | { type: 'plugins' }
 
 // ---------- Налаштування ----------
 
@@ -232,4 +234,46 @@ export type KbNoteFull = KbNote & {
   /** [[ціль]] → шлях нотатки або null, якщо такої ще немає. */
   links: Record<string, string | null>
   backlinks: { path: string; title: string; folder: string; snippet: string }[]
+}
+
+// ---------- Плагіни (MCP-сервери Hermes) ----------
+
+export type PluginStatus = 'connected' | 'connecting' | 'failed' | 'needs_auth' | 'disabled' | 'idle'
+
+/** Плагін — MCP-сервер Hermes: запис каталогу (optional-mcps), уже підключений сервер або обидва. */
+export type Plugin = {
+  name: string
+  description: string
+  /** Є в каталозі Hermes (його можна встановити й видалити звідси). */
+  catalog: boolean
+  installed: boolean
+  enabled: boolean
+  /** Як входити: oauth — через сторінку сервісу; none — без входу; key — свій ключ чи заголовок. */
+  auth: 'oauth' | 'none' | 'key'
+  transport: 'http' | 'stdio'
+  /** Домен сервісу для іконки й підпису (без шляху й токенів), для stdio — null. */
+  host: string | null
+  docs: string | null
+  /** Що треба вписати перед встановленням (asana, n8n). */
+  env: { name: string; prompt: string; required: boolean }[]
+  examples: string[]
+  status: PluginStatus | null
+  tools: number | null
+  /** Сервер приніс плагін Hermes: змінювати його тут не можна. */
+  fromPlugin: string | null
+}
+
+export type PluginTool = { name: string; description: string }
+
+export type PluginTest = { ok: boolean; tools: PluginTool[]; error: string | null; needsAuth: boolean }
+
+/** Вхід через OAuth: сторінка сервісу і чи повернеться браузер сам (інакше адресу вставляють вручну). */
+export type PluginAuthFlow = {
+  id: string
+  name: string
+  status: 'starting' | 'authorization_required' | 'approved' | 'error'
+  url: string | null
+  error: string | null
+  /** Сервіс поверне браузер на 127.0.0.1: з іншого пристрою адресу після входу треба вставити вручну. */
+  loopback: boolean
 }

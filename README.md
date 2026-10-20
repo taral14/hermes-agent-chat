@@ -25,6 +25,9 @@ and get push notifications on your phone. One user, your own machine, no cloud.
   and a sheet lets you change the time, pause it or mute its notifications — or just ask Hermes in the chat.
 - **Obsidian knowledge base.** Read the vault Hermes writes to: wiki-links, backlinks, search, a link graph,
   and notes mentioned in answers become clickable chips. Updates live.
+- **Plugins.** Connect services from the Hermes MCP catalog (Notion, Linear, Figma, Todoist and ~60 more) like
+  ChatGPT apps: one tap, sign in on the service's page (works from a phone too), turn servers on and off, see
+  their status and tools. Your own MCP servers from `config.yaml` show up there as well.
 - **Files both ways.** Attach images and documents; files Hermes sends (`MEDIA:/path`) arrive as players,
   previews and download cards. Huge files are never copied — you get a temporary download link.
 - **Link previews, YouTube embeds, read-only share links**, export to Markdown, chat lists (like projects).

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type CommandInfo, api } from './api.ts'
 import { on } from './bus.ts'
 import { ChatPane } from './components/ChatPane.tsx'
@@ -17,7 +17,7 @@ import { Sidebar } from './components/Sidebar.tsx'
 import { useChats } from './hooks/useChats.ts'
 import { kb, obsidianUriToPath } from './kb.ts'
 import { reportPresence } from './push.ts'
-import { chatUrl, jobsUrl, kbUrl, navigateTo, useRoute } from './router.ts'
+import { chatUrl, jobsUrl, kbUrl, navigateTo, pluginsUrl, useRoute } from './router.ts'
 import type { Attachment, ChatMode, ChatPrefs, ModelChoice, ModelOptions } from './shared.ts'
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
@@ -25,6 +25,9 @@ const NARROW = '(max-width: 768px)'
 const isNarrow = () => matchMedia(NARROW).matches
 
 const navigate = (id: string | null, replace = false) => navigateTo(chatUrl(id), replace)
+/** Плагіни тягнуть іконки брендів (~60 КБ): вантажимо сторінку окремо, коли її відкривають. */
+const PluginsView = lazy(() => import('./components/Plugins.tsx').then((m) => ({ default: m.PluginsView })))
+
 const goJobs = (r: JobsRoute | null) => (r ? navigateTo(jobsUrl(r)) : navigate(null))
 const goKb = (r: KbRoute) => navigateTo(kbUrl(r))
 
@@ -187,7 +190,15 @@ export default function App() {
 
   useEffect(() => {
     document.title =
-      route.kind === 'kb' ? 'База знань · Hermes' : route.kind === 'jobs' ? 'Розклад · Hermes' : current?.title ? `${current.title} · Hermes` : 'Hermes'
+      route.kind === 'kb'
+        ? 'База знань · Hermes'
+        : route.kind === 'jobs'
+          ? 'Розклад · Hermes'
+          : route.kind === 'plugins'
+            ? 'Плагіни · Hermes'
+            : current?.title
+              ? `${current.title} · Hermes`
+              : 'Hermes'
   }, [current?.title, route.kind])
 
   // ---------- Дії ----------
@@ -324,6 +335,8 @@ export default function App() {
             onNew={() => newChat()}
             onKb={() => goKb({ kind: 'home' })}
             kbActive={route.kind === 'kb'}
+            onPlugins={() => navigateTo(pluginsUrl(null))}
+            pluginsActive={route.kind === 'plugins'}
             onSettings={() => {
               if (isNarrow()) setSidebar(false)
               setSettingsOpen(true)
@@ -370,6 +383,10 @@ export default function App() {
               navigate(null)
             }}
           />
+        ) : route.kind === 'plugins' ? (
+          <Suspense fallback={null}>
+            <PluginsView name={route.name} sidebarOpen={sidebar && !narrow} openSidebar={() => setSidebar(true)} version={store.pluginsVersion} />
+          </Suspense>
         ) : route.kind === 'jobs' ? (
           <JobsView route={route.jobs} go={goJobs} sidebarOpen={sidebar && !narrow} openSidebar={() => setSidebar(true)} flash={flash} />
         ) : (

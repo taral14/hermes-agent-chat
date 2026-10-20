@@ -12,12 +12,18 @@ import type {
   Message,
   ModelChoice,
   ModelOptions,
+  Plugin,
+  PluginAuthFlow,
+  PluginTest,
   SettingsInfo,
   ShareInfo,
   ShareListItem,
   SharedChat,
   StorageInfo,
 } from './shared.ts'
+
+/** Hermes перепідключить сервери зараз чи після відповіді, що зараз іде. */
+export type PluginChange = { reload: 'now' | 'after-run' }
 
 const req = <T>(method: string, path: string, body?: unknown) => request<T>(method, path, { body })
 
@@ -56,6 +62,15 @@ export const api = {
   updateJob: (id: string, body: Partial<JobInput> & { enabled?: boolean }) => req<Job>('PATCH', `/api/jobs/${id}`, body),
   deleteJob: (id: string) => req('DELETE', `/api/jobs/${id}`),
   jobAction: (id: string, action: 'pause' | 'resume' | 'run') => req<Job>('POST', `/api/jobs/${id}/${action}`),
+  plugins: () => req<Plugin[]>('GET', '/api/plugins'),
+  installPlugin: (name: string, env: Record<string, string> = {}) => req<PluginChange>('POST', `/api/plugins/${encodeURIComponent(name)}/install`, { env }),
+  setPluginEnabled: (name: string, enabled: boolean) => req<PluginChange>('PUT', `/api/plugins/${encodeURIComponent(name)}/enabled`, { enabled }),
+  removePlugin: (name: string) => req<PluginChange>('DELETE', `/api/plugins/${encodeURIComponent(name)}`),
+  testPlugin: (name: string) => req<PluginTest>('POST', `/api/plugins/${encodeURIComponent(name)}/test`),
+  startPluginAuth: (name: string) => req<PluginAuthFlow>('POST', `/api/plugins/${encodeURIComponent(name)}/auth`),
+  pluginFlow: (id: string) => req<PluginAuthFlow>('GET', `/api/plugins/flows/${id}`),
+  finishPluginFlow: (id: string, url: string) => req<PluginAuthFlow>('POST', `/api/plugins/flows/${id}/callback`, { url }),
+  cancelPluginFlow: (id: string) => req('DELETE', `/api/plugins/flows/${id}`),
   jobRuns: (id: string) => req<JobRun[]>('GET', `/api/jobs/${id}/runs`),
   runOutput: (sessionId: string) => req<{ output: string }>('GET', `/api/jobs/runs/${sessionId}`),
   settings: () => req<SettingsInfo>('GET', '/api/settings'),

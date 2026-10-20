@@ -1,10 +1,15 @@
-// Адреса сторінки — єдине джерело маршруту: /c/<чат>, /jobs/…, /kb/…. Переходи — лише через navigateTo.
+// Адреса сторінки — єдине джерело маршруту: /c/<чат>, /jobs/…, /kb/…, /plugins/…. Переходи — лише через navigateTo.
 import { useSyncExternalStore } from 'react'
 import type { JobsRoute } from './components/Jobs.tsx'
 import type { KbRoute } from './components/Kb.tsx'
 import { notePath } from './kb.ts'
 
-export type Route = { kind: 'chat'; id: string | null } | { kind: 'jobs'; jobs: JobsRoute } | { kind: 'kb'; kb: KbRoute }
+export type Route =
+  | { kind: 'chat'; id: string | null }
+  | { kind: 'jobs'; jobs: JobsRoute }
+  | { kind: 'kb'; kb: KbRoute }
+  /** Каталог плагінів; name — відкритий плагін. */
+  | { kind: 'plugins'; name: string | null }
 
 const CHANGE = 'chat:route'
 
@@ -13,6 +18,8 @@ export function parseRoute(pathname: string, search = ''): Route {
   if (c) return { kind: 'chat', id: c[1]! }
   const j = /^\/jobs(?:\/([\w-]+))?\/?$/.exec(pathname)
   if (j) return { kind: 'jobs', jobs: !j[1] ? { kind: 'list' } : j[1] === 'new' ? { kind: 'new' } : { kind: 'job', id: j[1] } }
+  const p = /^\/plugins(?:\/([\w.-]+))?\/?$/.exec(pathname)
+  if (p) return { kind: 'plugins', name: p[1] ?? null }
   if (pathname === '/kb' || pathname === '/kb/') return { kind: 'kb', kb: { kind: 'home' } }
   if (pathname === '/kb/graph') return { kind: 'kb', kb: { kind: 'graph', focus: new URLSearchParams(search).get('focus') ?? undefined } }
   if (pathname.startsWith('/kb/n/')) return { kind: 'kb', kb: { kind: 'note', path: pathname.slice(6).split('/').map(decodeURIComponent).join('/') } }
@@ -21,6 +28,7 @@ export function parseRoute(pathname: string, search = ''): Route {
 
 export const chatUrl = (id: string | null) => (id ? `/c/${id}` : '/')
 export const jobsUrl = (r: JobsRoute) => (r.kind === 'list' ? '/jobs' : r.kind === 'new' ? '/jobs/new' : `/jobs/${r.id}`)
+export const pluginsUrl = (name: string | null) => (name ? `/plugins/${encodeURIComponent(name)}` : '/plugins')
 export const kbUrl = (r: KbRoute) =>
   r.kind === 'home' ? '/kb' : r.kind === 'graph' ? `/kb/graph${r.focus ? `?focus=${encodeURIComponent(r.focus)}` : ''}` : notePath(r.path)
 

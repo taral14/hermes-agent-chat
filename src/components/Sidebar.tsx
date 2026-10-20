@@ -1,6 +1,7 @@
 import {
   AlarmClock,
   Pause,
+  Blocks,
   BookOpen,
   Check,
   ChevronRight,
@@ -43,6 +44,8 @@ type Props = {
   onSettings: () => void
   onKb: () => void
   kbActive: boolean
+  onPlugins: () => void
+  pluginsActive: boolean
 }
 
 function groupOf(ts: number): string {
@@ -481,6 +484,12 @@ export function Sidebar(p: Props) {
                 <BookOpen size={p.narrow ? 24 : 18} />
               </span>
               <span>База знань</span>
+            </button>
+            <button type="button" className={`nav-row ${p.pluginsActive ? 'is-active' : ''}`} onClick={p.onPlugins}>
+              <span className="nav-icon">
+                <Blocks size={p.narrow ? 24 : 18} />
+              </span>
+              <span>Плагіни</span>
             </button>
           </div>
         )}

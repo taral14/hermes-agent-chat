@@ -41,6 +41,7 @@ export function useChats(enabled: boolean, events: Events) {
   const [lists, setLists] = useState<ChatList[]>([])
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [kbVersion, setKbVersion] = useState(0)
+  const [pluginsVersion, setPluginsVersion] = useState(0)
   const on = useRef(events)
   on.current = events
   const pending = useRef(new Map<string, Pending>())
@@ -124,6 +125,8 @@ export function useChats(enabled: boolean, events: Events) {
       } else if (e.type === 'kb') {
         setKbVersion((v) => v + 1)
         invalidateNoteIndex()
+      } else if (e.type === 'plugins') {
+        setPluginsVersion((v) => v + 1)
       } else if (e.type === 'chat-deleted') {
         setChats((c) => c.filter((x) => x.id !== e.chatId))
         on.current.onGone(e.chatId)
@@ -198,5 +201,5 @@ export function useChats(enabled: boolean, events: Events) {
     setMessages({})
   }, [])
 
-  return { chats, lists, messages, kbVersion, loadChat, applyChat, patchChat, removeChat, createList, renameList, deleteList, clearAll }
+  return { chats, lists, messages, kbVersion, pluginsVersion, loadChat, applyChat, patchChat, removeChat, createList, renameList, deleteList, clearAll }
 }

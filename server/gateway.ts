@@ -31,6 +31,9 @@ export type GatewayEvent = {
   payload?: Record<string, unknown>
 } & Record<string, unknown>
 
+/** Відповідь HTTP-маршруту gateway: тіло — JSON, якщо воно розібралось, інакше текст. */
+export type HttpReply<T = unknown> = { status: number; body: T }
+
 export type ServerRequest = { id: string; method: string; params: Record<string, unknown> }
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }
@@ -167,19 +170,33 @@ class Gateway {
   }
 
   async rpc<T = Record<string, unknown>>(method: string, params: Record<string, unknown> = {}, timeoutMs = 30_000): Promise<T> {
+    return this.call<T>({ method, params }, method, timeoutMs)
+  }
+
+  /** HTTP-маршрут gateway (/api/mcp/… тощо). Міст сам додає одноразовий квиток; статус повертається як є. */
+  async http<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, timeoutMs = 30_000): Promise<HttpReply<T>> {
+    return this.call<HttpReply<T>>({ http: { method, path, body: body ?? null } }, `${method} ${path}`, timeoutMs)
+  }
+
+  /** Блок mcp_servers.<name> для запису каталогу Hermes (з фільтром інструментів), без запису в конфіг. */
+  async catalogConfig(name: string): Promise<Record<string, unknown>> {
+    return this.call({ catalog: name }, `каталог ${name}`, 30_000)
+  }
+
+  private async call<T>(payload: Record<string, unknown>, what: string, timeoutMs: number): Promise<T> {
     await this.whenReady(20_000)
     const id = ++this.seq
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        reject(new GatewayError('timeout', `Hermes не відповів на ${method}`))
+        reject(new GatewayError('timeout', `Hermes не відповів на ${what}`))
       }, timeoutMs + 2000)
       if (!this.child) {
         clearTimeout(timer)
         return reject(new GatewayError('disconnected', 'Зв’язок із Hermes обірвався'))
       }
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer })
-      this.child.stdin.write(JSON.stringify({ id, method, params, timeout: timeoutMs / 1000 }) + '\n')
+      this.child.stdin.write(JSON.stringify({ id, ...payload, timeout: timeoutMs / 1000 }) + '\n')
     })
   }
 

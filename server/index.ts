@@ -16,6 +16,7 @@ import { chatRoutes } from './routes/chats.ts'
 import { fileRoutes, serveDownloadLink } from './routes/files.ts'
 import { hookRoutes } from './routes/hooks.ts'
 import { jobRoutes } from './routes/jobs.ts'
+import { pluginReturnRoute, pluginRoutes } from './routes/plugins.ts'
 import { kbRoutes } from './routes/kb.ts'
 import { pushRoutes } from './routes/push.ts'
 import { settingsRoutes } from './routes/settings.ts'
@@ -37,9 +38,9 @@ const ping: Routes = ({ res, path }) => {
 }
 
 /** Без входу: вхід, публічні посилання, хук Hermes. */
-const PUBLIC: Routes[] = [loginRoutes, ping, publicShareRoutes, hookRoutes]
+const PUBLIC: Routes[] = [loginRoutes, ping, publicShareRoutes, hookRoutes, pluginReturnRoute]
 /** Лише після входу. */
-const PRIVATE: Routes[] = [accountRoutes, eventsRoute, pushRoutes, settingsRoutes, shareRoutes, chatRoutes, kbRoutes, fileRoutes, jobRoutes]
+const PRIVATE: Routes[] = [accountRoutes, eventsRoute, pushRoutes, settingsRoutes, shareRoutes, chatRoutes, kbRoutes, fileRoutes, jobRoutes, pluginRoutes]
 
 async function api(c: Ctx) {
   if (c.method !== 'GET' && c.method !== 'HEAD' && c.method !== 'OPTIONS' && !sameOrigin(c.req)) {

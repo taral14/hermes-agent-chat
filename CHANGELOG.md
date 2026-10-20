@@ -14,6 +14,8 @@ First public release. Tested with Hermes Agent 0.22.
 - Obsidian knowledge base: notes, wiki-links, backlinks, search, graph, live updates, note chips in answers.
 - Files both ways, large files by temporary link, audio player, link previews, YouTube embeds.
 - Read-only share links, export to Markdown, chat lists.
+- Plugins page: the Hermes MCP catalog with brand icons, search, one-tap connect, OAuth sign-in that finishes
+  on a phone, enable/disable, status and tool lists for catalog and custom servers.
 - PWA with web push, passkeys, session management.
 - `npm run setup` (first run), `npm run doctor` (Hermes version and time zone checks), Hermes `webchat` plugin,
   iCloud vault mirror for macOS.
