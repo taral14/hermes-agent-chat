@@ -1791,6 +1791,8 @@ button.act-line:hover:not(:disabled) {
 .jobs-scroll {
   flex: 1;
   overflow-y: auto;
+  /* Сторінка ніколи не їде вбік: широкий елемент прокручується сам або обрізається. */
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -6499,8 +6501,16 @@ a.job-action {
   color: var(--text-2);
 }
 
+/* Власна прокрутка: .seg-scroll на телефоні навмисно вимкнена (там режими розкладу стають сіткою). */
 .plugin-chips {
-  margin-bottom: 14px;
+  overflow-x: auto;
+  margin: 0 -16px 14px;
+  padding: 0 16px;
+  scrollbar-width: none;
+}
+
+.plugin-chips::-webkit-scrollbar {
+  display: none;
 }
 
 .plugin-more {

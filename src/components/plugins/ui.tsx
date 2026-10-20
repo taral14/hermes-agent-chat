@@ -87,7 +87,7 @@ export function Row({ icon, title, sub, right, onOpen }: { icon: ReactNode; titl
 /** Фільтр категорій: прокручуваний ряд кнопок. */
 export function Chips<T extends string>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className="seg-scroll plugin-chips">
+    <div className="plugin-chips">
       <div className="seg seg-small">
         {options.map((o) => (
           <button key={o.value} type="button" aria-pressed={o.value === value} className={o.value === value ? 'is-on' : ''} onClick={() => onChange(o.value)}>
