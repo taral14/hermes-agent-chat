@@ -15,6 +15,8 @@ type Events = {
   unauthorized: undefined
   /** Почав грати аудіоплеєр з цим id: інші ставлять на паузу. */
   'audio-play': string
+  /** Відкрити файл (PDF, картинку, текст) у переглядачі поверх чату. */
+  file: import('./viewer.ts').ViewFile
 }
 
 type Handler<K extends keyof Events> = (detail: Events[K]) => void

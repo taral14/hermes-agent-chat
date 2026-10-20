@@ -3,6 +3,7 @@ import { type CommandInfo, api } from './api.ts'
 import { on } from './bus.ts'
 import { ChatPane } from './components/ChatPane.tsx'
 import { Composer, type ComposerHandle, setDraft } from './components/Composer.tsx'
+import { FileViewerHost } from './components/FileViewer.tsx'
 import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { JobSheet } from './components/JobSheet.tsx'
 import { type KbRoute, KbView } from './components/Kb.tsx'
@@ -449,6 +450,7 @@ export default function App() {
         {jobSheet && (
           <JobSheet id={jobSheet} chat={chats.find((c) => c.jobs?.some((j) => j.id === jobSheet)) ?? null} onClose={closeJobSheet} flash={flash} />
         )}
+        <FileViewerHost />
       </main>
     </div>
   )

@@ -5,6 +5,7 @@ import { isPublicView, uploadUrl } from '../../api.ts'
 import { fileKind, formatSize } from '../../fileKind.ts'
 import { request } from '../../http.ts'
 import type { Attachment } from '../../shared.ts'
+import { openInViewer } from '../../viewer.ts'
 import { AudioPlayer } from '../AudioPlayer.tsx'
 
 /** Файл на сторінці спільного доступу: просте завантаження, а файли, що лишились на сервері, — тільки назва. */
@@ -37,7 +38,7 @@ function PublicFileCard({ a }: { a: Attachment }) {
   }
   return (
     <div className="att-file">
-      <a href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file-open" title={a.name}>
+      <a href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file-open" title={a.name} onClick={(e) => openInViewer(e, { url: uploadUrl(a.id), ...a })}>
         {icon}
         {text}
       </a>
@@ -98,7 +99,7 @@ function PrivateFileCard({ a }: { a: Attachment }) {
   }
   return (
     <div className="att-file">
-      <a href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file-open" title={a.name}>
+      <a href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file-open" title={a.name} onClick={(e) => openInViewer(e, { url: uploadUrl(a.id), ...a })}>
         <span className="att-file-icon" style={{ background: kind.color }}>
           <kind.Icon size={19} />
           {kind.ext && kind.ext.length <= 4 && <span className="att-ext">{kind.ext}</span>}
@@ -133,7 +134,7 @@ export function Attachments({ items, side }: { items: Attachment[]; side: 'user'
         !a.id ? (
           <FileCard key={`${i}:${a.name}`} a={a} />
         ) : a.mime.startsWith('image/') ? (
-          <a key={a.id} href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-image">
+          <a key={a.id} href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-image" onClick={(e) => openInViewer(e, { url: uploadUrl(a.id), ...a })}>
             <img src={uploadUrl(a.id)} alt={a.name} loading="lazy" />
           </a>
         ) : a.mime.startsWith('audio/') ? (

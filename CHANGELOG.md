@@ -19,6 +19,8 @@ First public release. Tested with Hermes Agent 0.22.
 - Extensions tab (Hermes code plugins: catalog, `~/.hermes/plugins` folder, settings, updates with capability
   consent) and skills tab (installed, official catalog, search across sources, install, enable/disable).
 - "Translate" next to English descriptions, done by Hermes' auxiliary model and cached.
+- In-app file viewer for PDFs (PDF.js, loaded in ranges so large files open fast), images and text, with a
+  progress bar; closes with ×, Escape or the back gesture instead of replacing the app on phones.
 - PWA with web push, passkeys, session management.
 - `npm run setup` (first run), `npm run doctor` (Hermes version and time zone checks), Hermes `webchat` plugin,
   iCloud vault mirror for macOS.

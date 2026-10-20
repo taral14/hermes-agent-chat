@@ -2,6 +2,7 @@ import { Eye, Loader2 } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { api } from '../api.ts'
 import type { LinkPreview, Message, SharedChat } from '../shared.ts'
+import { FileViewerHost } from './FileViewer.tsx'
 import { PreviewContext } from './Links.tsx'
 import { MessageView, TimeSeparator, needsTimeSeparator } from './MessageView.tsx'
 
@@ -43,6 +44,7 @@ export function ShareView({ token }: { token: string }) {
 
   return (
     <div className="share-page">
+      <FileViewerHost />
       <header className="share-top">
         <a className="share-brand" href="/">
           <img src="/favicon.svg" alt="" />
