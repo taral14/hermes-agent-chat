@@ -250,6 +250,8 @@ export default function App() {
   /** Новий чат одразу з курсором у полі вводу (і відкритою клавіатурою на телефоні, див. keyboard.ts). */
   const newChat = (listId: string | null = null) => {
     const release = holdKeyboard()
+    // Якщо новий чат уже відкрито, адреса не зміниться, і панель сама не сховається.
+    if (isNarrow()) setSidebar(false)
     setNewListId(listId)
     navigate(null)
     setTimeout(() => {
@@ -338,7 +340,11 @@ export default function App() {
             chats={chats}
             currentId={currentId}
             username={username}
-            onSelect={(id) => navigate(id)}
+            onSelect={(id) => {
+              // Той самий чат: адреса не зміниться, тож панель ховаємо самі.
+              if (isNarrow()) setSidebar(false)
+              navigate(id)
+            }}
             onNew={() => newChat()}
             onKb={() => goKb({ kind: 'home' })}
             kbActive={route.kind === 'kb'}
