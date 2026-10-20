@@ -140,6 +140,11 @@ function usable(p: string): string | null {
 const TAG_RE = /MEDIA:\s*(?:`([^`\n]+)`|"([^"\n]+)"|'([^'\n]+)'|(\S+))/g
 // Рядок, що складається лише з абсолютного шляху (можливо в лапках, коді чи як посилання).
 const LINE_RE = /^[ \t>*_-]*[`"'(<]?((?:~|\/)[^\n`"'<>()]*?\.[A-Za-z0-9]{1,5})[`"')>]?[ \t*_.]*$/gm
+// Шлях без пробілів у кінці рядка: «Архів готовий: /…/cards.zip». Межа перед ним — пробіл, двокрапка чи тире.
+const TAIL_RE = /(^|[\s:—–])[`"']?((?:~\/|\/)[^\s`"'<>()]+\.[A-Za-z0-9]{1,5})[`"']?[.,;!?]*[ \t]*$/gm
+// Так чіпляємо лише «результати» (архіви, документи, медіа). Текстові файли в кінці речення — це зазвичай
+// звіт про роботу («оновив …/SKILL.md»), а не файл для людини; їх і далі чіпляє MEDIA: чи окремий рядок.
+const TAIL_SKIP = new Set(['.md', '.txt', '.json', '.html'])
 
 /** Шукає файли у відповіді. Повертає шляхи і текст без службових рядків. */
 export function extractMedia(text: string): { paths: string[]; text: string } {
@@ -152,6 +157,10 @@ export function extractMedia(text: string): { paths: string[]; text: string } {
   let out = text.replace(TAG_RE, (all, a, b, c, d) => (add(a ?? b ?? c ?? d) ? '' : all))
   // Шлях окремим рядком прибираємо лише тоді, коли такий файл справді є і його відомо, як показати.
   out = out.replace(LINE_RE, (all, p: string) => (MIME[extname(p).toLowerCase()] && add(p) ? '' : all))
+  out = out.replace(TAIL_RE, (all, lead: string, p: string) => {
+    const ext = extname(p).toLowerCase()
+    return MIME[ext] && !TAIL_SKIP.has(ext) && add(p) ? lead.trimEnd() : all
+  })
   out = out.replace(/\n{3,}/g, '\n\n').trim()
   return { paths: found, text: out }
 }
