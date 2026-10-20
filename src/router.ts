@@ -8,8 +8,11 @@ export type Route =
   | { kind: 'chat'; id: string | null }
   | { kind: 'jobs'; jobs: JobsRoute }
   | { kind: 'kb'; kb: KbRoute }
-  /** Каталог плагінів; name — відкритий плагін. */
-  | { kind: 'plugins'; name: string | null }
+  /** Плагіни: вкладка і відкритий запис (назва сервера, ключ розширення чи id навички). */
+  | { kind: 'plugins'; tab: PluginTab; id: string | null }
+
+/** Сервіси — MCP-сервери, розширення — code-плагіни Hermes, навички — скіли. */
+export type PluginTab = 'services' | 'extensions' | 'skills'
 
 const CHANGE = 'chat:route'
 
@@ -18,8 +21,10 @@ export function parseRoute(pathname: string, search = ''): Route {
   if (c) return { kind: 'chat', id: c[1]! }
   const j = /^\/jobs(?:\/([\w-]+))?\/?$/.exec(pathname)
   if (j) return { kind: 'jobs', jobs: !j[1] ? { kind: 'list' } : j[1] === 'new' ? { kind: 'new' } : { kind: 'job', id: j[1] } }
+  const t = /^\/plugins\/(extensions|skills)(?:\/([^/]+))?\/?$/.exec(pathname)
+  if (t) return { kind: 'plugins', tab: t[1] as PluginTab, id: t[2] ? decodeURIComponent(t[2]) : null }
   const p = /^\/plugins(?:\/([\w.-]+))?\/?$/.exec(pathname)
-  if (p) return { kind: 'plugins', name: p[1] ?? null }
+  if (p) return { kind: 'plugins', tab: 'services', id: p[1] ?? null }
   if (pathname === '/kb' || pathname === '/kb/') return { kind: 'kb', kb: { kind: 'home' } }
   if (pathname === '/kb/graph') return { kind: 'kb', kb: { kind: 'graph', focus: new URLSearchParams(search).get('focus') ?? undefined } }
   if (pathname.startsWith('/kb/n/')) return { kind: 'kb', kb: { kind: 'note', path: pathname.slice(6).split('/').map(decodeURIComponent).join('/') } }
@@ -28,7 +33,9 @@ export function parseRoute(pathname: string, search = ''): Route {
 
 export const chatUrl = (id: string | null) => (id ? `/c/${id}` : '/')
 export const jobsUrl = (r: JobsRoute) => (r.kind === 'list' ? '/jobs' : r.kind === 'new' ? '/jobs/new' : `/jobs/${r.id}`)
-export const pluginsUrl = (name: string | null) => (name ? `/plugins/${encodeURIComponent(name)}` : '/plugins')
+/** Ключі розширень і id навичок бувають зі «/» (web/firecrawl, official/…/name): кодуємо одним сегментом. */
+export const pluginsUrl = (tab: PluginTab = 'services', id: string | null = null) =>
+  `/plugins${tab === 'services' ? '' : `/${tab}`}${id ? `/${encodeURIComponent(id)}` : ''}`
 export const kbUrl = (r: KbRoute) =>
   r.kind === 'home' ? '/kb' : r.kind === 'graph' ? `/kb/graph${r.focus ? `?focus=${encodeURIComponent(r.focus)}` : ''}` : notePath(r.path)
 

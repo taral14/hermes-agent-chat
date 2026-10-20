@@ -28,6 +28,9 @@ and get push notifications on your phone. One user, your own machine, no cloud.
 - **Plugins.** Connect services from the Hermes MCP catalog (Notion, Linear, Figma, Todoist and ~60 more) like
   ChatGPT apps: one tap, sign in on the service's page (works from a phone too), turn servers on and off, see
   their status and tools. Your own MCP servers from `config.yaml` show up there as well.
+  Two more tabs: **extensions** — Hermes code plugins from its catalog (~560) and from `~/.hermes/plugins`
+  (drop a folder there and enable it with one tap), with settings and updates; **skills** — installed skills,
+  the official Hermes catalog and search across other skill sources.
 - **Files both ways.** Attach images and documents; files Hermes sends (`MEDIA:/path`) arrive as players,
   previews and download cards. Huge files are never copied — you get a temporary download link.
 - **Link previews, YouTube embeds, read-only share links**, export to Markdown, chat lists (like projects).

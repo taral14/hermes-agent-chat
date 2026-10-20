@@ -277,3 +277,71 @@ export type PluginAuthFlow = {
   /** Сервіс поверне браузер на 127.0.0.1: з іншого пристрою адресу після входу треба вставити вручну. */
   loopback: boolean
 }
+
+// ---------- Розширення (code-плагіни Hermes) ----------
+
+export type ExtensionSetting = {
+  key: string
+  type: 'string' | 'number' | 'boolean' | 'enum' | 'secret' | 'json'
+  label: string
+  description: string
+  required: boolean
+  value?: unknown
+  default?: unknown
+  choices?: string[]
+  /** Для secret: змінна в ~/.hermes/.env і чи вона вже задана (значення не віддаємо). */
+  env?: string
+  hasValue?: boolean
+}
+
+/** Запис каталогу плагінів Hermes, уже встановлений плагін або обидва. */
+export type Extension = {
+  /** Назва в каталозі чи з маніфесту; за нею й адреса картки. */
+  name: string
+  title: string
+  description: string
+  category: string
+  /** null — не з каталогу (своя папка, git). */
+  tier: 'official' | 'verified' | 'community' | null
+  maintainer: string
+  image: string | null
+  docs: string | null
+  requiresEnv: string[]
+  knownIssues: string[]
+  installed: boolean
+  /** Стан у Hermes: увімкнено, вимкнено чи лежить у папці й чекає на увімкнення. */
+  status: 'enabled' | 'disabled' | 'available' | null
+  /** Ключ у реєстрі Hermes (для перемикання й налаштувань). */
+  key: string | null
+  /** Тека в ~/.hermes/plugins (для видалення й оновлення). */
+  dir: string | null
+  updateAvailable: boolean
+  settings: ExtensionSetting[]
+  servers: { name: string; state: string; sentence: string }[]
+}
+
+export type ExtensionResult = {
+  restartRequired: boolean
+  warnings: string[]
+  missingEnv: string[]
+  /** Оновлення розширює можливості: показати й попросити згоди. */
+  consent?: string[]
+}
+
+// ---------- Навички (скіли Hermes) ----------
+
+export type Skill = {
+  /** identifier із каталогу або назва встановленої навички. */
+  id: string
+  name: string
+  description: string
+  category: string
+  installed: boolean
+  enabled: boolean
+  /** Звідки встановлена: bundled — разом із Hermes, hub — з каталогу, agent — створена Hermes чи тобою. */
+  provenance: 'bundled' | 'hub' | 'agent' | 'external' | null
+  /** Каталог і довіра: builtin (Hermes), trusted, community. */
+  source: string | null
+  trust: 'builtin' | 'trusted' | 'community' | null
+  usage: number
+}

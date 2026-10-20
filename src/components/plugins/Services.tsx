@@ -1,23 +1,12 @@
-import { Check, ExternalLink, Loader2, Plus, RefreshCw, Search, Trash2, Wrench } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, unfurl } from '../api.ts'
-import { BRAND_ICONS, POPULAR, STATUS_TEXT, isSecretField, matches, pluginSubtitle, pluginTitle } from '../plugins.ts'
-import { navigateTo, pluginsUrl } from '../router.ts'
-import { plural } from '../schedule.ts'
-import type { Plugin, PluginAuthFlow, PluginTest } from '../shared.ts'
-import { Sheet } from './ui/Sheet.tsx'
-import { Switch } from './ui/Switch.tsx'
-import { TopBar } from './ui/TopBar.tsx'
-
-type Props = {
-  name: string | null
-  sidebarOpen: boolean
-  openSidebar: () => void
-  /** Росте, коли Hermes перепідключив сервери (подія з сервера). */
-  version: number
-}
-
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
+import { Check, ExternalLink, Loader2, Plus, RefreshCw, Trash2, Wrench } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { api, unfurl } from '../../api.ts'
+import { BRAND_ICONS, POPULAR, STATUS_TEXT, isSecretField, matches, pluginSubtitle, pluginTitle } from '../../plugins.ts'
+import { plural } from '../../schedule.ts'
+import type { Plugin, PluginAuthFlow, PluginTest } from '../../shared.ts'
+import { Sheet } from '../ui/Sheet.tsx'
+import { Switch } from '../ui/Switch.tsx'
+import { Empty, LoadState, Row, Section, type TabProps, message, useLoad } from './ui.tsx'
 
 // ---------- Іконка ----------
 
@@ -66,48 +55,28 @@ export function PluginIcon({ plugin, size = 44 }: { plugin: Plugin; size?: numbe
 const dotClass = (p: Plugin) =>
   p.status === 'connected' ? 'is-ok' : p.status === 'failed' ? 'is-bad' : p.status === 'disabled' ? 'is-off' : 'is-wait'
 
-// ---------- Список ----------
+const stateLabel = (p: Plugin) => <span className={`plugin-state ${dotClass(p)}`}>{p.status ? STATUS_TEXT[p.status] : ''}</span>
+const addMark = (
+  <span className="plugin-add" aria-label="Підключити">
+    <Plus size={22} />
+  </span>
+)
 
-function PluginRow({ plugin, onOpen }: { plugin: Plugin; onOpen: () => void }) {
+function ServiceRow({ plugin, onOpen }: { plugin: Plugin; onOpen: () => void }) {
   return (
-    <button type="button" className="plugin-row" onClick={onOpen}>
-      <PluginIcon plugin={plugin} />
-      <span className="plugin-row-main">
-        <span className="plugin-row-name">{pluginTitle(plugin.name)}</span>
-        <span className="plugin-row-sub">{pluginSubtitle(plugin)}</span>
-      </span>
-      {plugin.installed ? (
-        <span className={`plugin-state ${dotClass(plugin)}`}>{plugin.status ? STATUS_TEXT[plugin.status] : ''}</span>
-      ) : (
-        <span className="plugin-add" aria-label="Підключити">
-          <Plus size={22} />
-        </span>
-      )}
-    </button>
+    <Row
+      icon={<PluginIcon plugin={plugin} />}
+      title={pluginTitle(plugin.name)}
+      sub={pluginSubtitle(plugin)}
+      right={plugin.installed ? stateLabel(plugin) : addMark}
+      onOpen={onOpen}
+    />
   )
 }
 
-export function PluginsView({ name, sidebarOpen, openSidebar, version }: Props) {
-  const [list, setList] = useState<Plugin[] | null>(null)
-  const [error, setError] = useState('')
-  const [q, setQ] = useState('')
-  /** Картку відкрили зі списку: «Закрити» = крок назад в історії, а не новий запис. */
-  const fromList = useRef(false)
-
-  const load = useCallback(
-    () =>
-      api
-        .plugins()
-        .then((l) => {
-          setList(l)
-          setError('')
-        })
-        .catch((e: unknown) => setError(message(e))),
-    [],
-  )
-  useEffect(() => {
-    void load()
-  }, [load, version])
+/** Вкладка «Сервіси»: MCP-сервери Hermes — підключені, добірки й увесь каталог. */
+export function ServicesTab({ q, id, open, close, version }: TabProps) {
+  const { data: list, error, reload } = useLoad(api.plugins, version)
 
   const groups = useMemo(() => {
     const all = list ?? []
@@ -115,105 +84,61 @@ export function PluginsView({ name, sidebarOpen, openSidebar, version }: Props) 
     const installed = all.filter((p) => p.installed).sort(byTitle)
     const rest = all.filter((p) => !p.installed && p.catalog)
     const popular = POPULAR.map((n) => rest.find((p) => p.name === n)).filter((p): p is Plugin => Boolean(p))
-    const open = rest.filter((p) => p.auth === 'none' && !POPULAR.includes(p.name)).sort(byTitle)
-    const other = rest.filter((p) => !popular.includes(p) && !open.includes(p)).sort(byTitle)
-    return { installed, popular, open, other }
+    const free = rest.filter((p) => p.auth === 'none' && !POPULAR.includes(p.name)).sort(byTitle)
+    const other = rest.filter((p) => !popular.includes(p) && !free.includes(p)).sort(byTitle)
+    return { installed, popular, free, other }
   }, [list])
 
-  const openPlugin = (p: Plugin) => {
-    fromList.current = true
-    navigateTo(pluginsUrl(p.name))
-  }
-  const close = () => {
-    if (fromList.current) history.back()
-    else navigateTo(pluginsUrl(null), true)
-    fromList.current = false
-  }
-
   const found = q.trim() ? (list ?? []).filter((p) => matches(p, q)) : null
-  const current = name ? (list?.find((p) => p.name === name) ?? null) : null
+  const current = id ? (list?.find((p) => p.name === id) ?? null) : null
   const working = groups.installed.filter((p) => p.status === 'connected').length
 
   const section = (title: string, items: Plugin[]) =>
     items.length > 0 && (
-      <section className="jobs-section">
-        <h2>{title}</h2>
-        <div className="plugin-list">
-          {items.map((p) => (
-            <PluginRow key={p.name} plugin={p} onOpen={() => openPlugin(p)} />
-          ))}
-        </div>
-      </section>
+      <Section title={title}>
+        {items.map((p) => (
+          <ServiceRow key={p.name} plugin={p} onOpen={() => open(p.name)} />
+        ))}
+      </Section>
     )
 
   return (
     <>
-      <TopBar title="Плагіни" sidebarOpen={sidebarOpen} openSidebar={openSidebar} />
-      <div className="jobs-scroll">
-        <div className="jobs-inner">
-          <div className="jobs-hero">
-            <h1>Плагіни</h1>
-            <p>
-              Сервіси, якими Hermes користується в розмовах і задачах.
-              {list && groups.installed.length > 0 && ` Підключено ${groups.installed.length}, працює ${working}.`}
-            </p>
-          </div>
-
-          <label className="plugin-search">
-            <Search size={18} />
-            <input type="search" placeholder="Пошук плагінів" value={q} onChange={(e) => setQ(e.target.value)} />
-          </label>
-
-          {error && !list && (
-            <div className="jobs-empty">
-              <p>{error}</p>
-              <button type="button" className="btn" onClick={() => void load()}>
-                <RefreshCw size={16} /> Спробувати ще
-              </button>
-            </div>
-          )}
-          {!list && !error && (
-            <div className="jobs-loading">
-              <Loader2 size={22} className="spin" />
-            </div>
-          )}
-
-          {found ? (
-            found.length ? (
-              section(`Знайдено ${found.length}`, found)
-            ) : (
-              <div className="jobs-empty">
-                <p>Нічого не знайшлося. Свій MCP-сервер можна додати в config.yaml Hermes.</p>
-              </div>
-            )
-          ) : (
-            list && (
-              <>
-                {groups.installed.length > 0 && (
-                  <section className="jobs-section">
-                    <h2>Підключені</h2>
-                    <div className="plugin-tiles">
-                      {groups.installed.map((p) => (
-                        <button key={p.name} type="button" className="plugin-tile" onClick={() => openPlugin(p)} title={pluginTitle(p.name)}>
-                          <span className="plugin-tile-icon">
-                            <PluginIcon plugin={p} size={56} />
-                            <span className={`plugin-dot ${dotClass(p)}`} aria-label={p.status ? STATUS_TEXT[p.status] : undefined} />
-                          </span>
-                          <span className="plugin-tile-name">{pluginTitle(p.name)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )}
-                {section('Популярні', groups.popular)}
-                {section('Без входу', groups.open)}
-                {section('Усі', groups.other)}
-              </>
-            )
-          )}
-        </div>
-      </div>
-      {current && <PluginSheet key={current.name} plugin={current} onClose={close} reload={load} />}
+      <LoadState loading={!list} error={error} retry={() => void reload()} />
+      {found ? (
+        found.length ? (
+          section(`Знайдено ${found.length}`, found)
+        ) : (
+          <Empty>Нічого не знайшлося. Свій MCP-сервер можна додати в config.yaml Hermes.</Empty>
+        )
+      ) : (
+        list && (
+          <>
+            {groups.installed.length > 0 && (
+              <section className="jobs-section">
+                <h2>
+                  Підключені · працює {working} з {groups.installed.length}
+                </h2>
+                <div className="plugin-tiles">
+                  {groups.installed.map((p) => (
+                    <button key={p.name} type="button" className="plugin-tile" onClick={() => open(p.name)} title={pluginTitle(p.name)}>
+                      <span className="plugin-tile-icon">
+                        <PluginIcon plugin={p} size={56} />
+                        <span className={`plugin-dot ${dotClass(p)}`} aria-label={p.status ? STATUS_TEXT[p.status] : undefined} />
+                      </span>
+                      <span className="plugin-tile-name">{pluginTitle(p.name)}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+            {section('Популярні', groups.popular)}
+            {section('Без входу', groups.free)}
+            {section('Усі', groups.other)}
+          </>
+        )
+      )}
+      {current && <PluginSheet key={current.name} plugin={current} onClose={close} reload={reload} />}
     </>
   )
 }

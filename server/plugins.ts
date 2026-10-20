@@ -8,6 +8,7 @@ import type { Plugin, PluginAuthFlow, PluginStatus, PluginTest } from '../src/sh
 import { PUBLIC_URL } from './config.ts'
 import { emit } from './events.ts'
 import { gateway } from './gateway.ts'
+import { api, seg } from './hermesApi.ts'
 import { HttpError } from './http.ts'
 import { activeRunCount } from './live.ts'
 
@@ -37,17 +38,6 @@ type StatusRow = { name: string; status?: string; tools?: number }
 
 type FlowSnapshot = { flow_id: string; server_name: string; status: PluginAuthFlow['status']; authorization_url?: string | null; error?: string | null }
 
-/** Виклик HTTP-маршруту gateway; помилка Hermes стає HttpError з його поясненням. */
-async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, timeoutMs?: number): Promise<T> {
-  const r = await gateway.http<T>(method, path, body, timeoutMs)
-  if (r.status < 400) return r.body
-  const b = r.body as unknown
-  const detail = b && typeof b === 'object' && 'detail' in b ? (b as { detail: unknown }).detail : b
-  const text = typeof detail === 'string' ? detail : Array.isArray(detail) ? 'Hermes не прийняв запит' : `Hermes відповів ${r.status}`
-  throw new HttpError(r.status === 404 || r.status === 409 || r.status === 400 ? r.status : 502, text.slice(0, 300))
-}
-
-const seg = (name: string) => encodeURIComponent(name)
 
 /** Домен сервісу: mcp.notion.com → notion.com. Шлях і запит (там бувають токени) не віддаємо. */
 function brandHost(url: string | null | undefined, hosts?: string[]): string | null {

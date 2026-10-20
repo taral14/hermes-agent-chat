@@ -25,6 +25,8 @@ Hermes ── webchat plugin ──POST /api/hooks/hermes─┘  (scheduled-task
 | `live.ts` | In-memory state of messages Hermes is working on; batching saves and broadcasts |
 | `hermes.ts`, `jobs.ts` | Client for the Hermes HTTP API (models, session titles, scheduled jobs and their runs) |
 | `plugins.ts` | Plugins = Hermes MCP servers: catalog, install, enable/disable, OAuth sign-in, `reload.mcp` |
+| `extensions.ts`, `skills.ts` | Hermes code plugins (`plugins.manage`, catalog over HTTP) and skills (hub, toggle, install) |
+| `hermesApi.ts` | Calls to the gateway's HTTP routes through the bridge, Hermes errors → HTTP errors |
 | `jobLinks.ts` | Which scheduled job delivers into which chat (`deliver=webchat:<chat id>`) |
 | `inbox.ts` | Messages Hermes sends on its own (plugin hook), job chats |
 | `media.ts` | `MEDIA:/path` attachments from Hermes, the deny-list of secret paths, upload sweeping |
@@ -63,6 +65,16 @@ OAuth sign-in state lives in the gateway process, which listens on loopback only
 `state` to the gateway's callback. Hermes checks `state`, so the route can stay public — on a phone the service's
 page opens in a browser that has no chat cookie. Services with a pinned loopback redirect (Asana) fall back to
 pasting the redirected address.
+
+Extensions and skills follow the same rule: the chat only presents Hermes' own management. Code plugins are
+listed and managed with `plugins.manage` (list, install by `catalog_name`, toggle, update with capability
+consent, settings, remove); the full catalog comes from `GET /api/dashboard/plugins/catalog` (~2 MB, cached for
+10 minutes and trimmed for the list). A folder dropped into `~/.hermes/plugins` shows up as "in the folder, off"
+until it is enabled — Hermes never runs plugin code nobody turned on. Secret settings and required variables go
+to `~/.hermes/.env` via `PUT /api/env`, limited to names the plugin itself declares. Skills use `GET /api/skills`
+(installed, including disabled), `/api/skills/hub/official` and `/hub/search`, `skills.manage install` (the scan
+verdict comes back synchronously) and `/api/skills/toggle`; uninstall is a Hermes background action the server
+waits for.
 
 ### Long tasks survive closed tabs
 

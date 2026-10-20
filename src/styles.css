@@ -6210,6 +6210,10 @@ a.job-action {
 
 /* ---------- Плагіни ---------- */
 
+.plugin-tabs {
+  margin: 0 0 14px;
+}
+
 .plugin-search {
   position: sticky;
   top: 0;
@@ -6493,4 +6497,62 @@ a.job-action {
   margin: 0;
   font-size: 14px;
   color: var(--text-2);
+}
+
+.plugin-chips {
+  margin-bottom: 14px;
+}
+
+.plugin-more {
+  align-self: center;
+  margin-top: 8px;
+}
+
+.plugin-badges,
+.plugin-head > .plugin-badges {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.plugin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--bubble);
+  color: var(--text-2);
+}
+
+.plugin-badge.is-trusted {
+  color: var(--ok);
+}
+
+.plugin-text {
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 14px;
+}
+
+.plugin-warn {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.plugin-desc {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
 }

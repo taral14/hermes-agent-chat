@@ -26,7 +26,7 @@ const isNarrow = () => matchMedia(NARROW).matches
 
 const navigate = (id: string | null, replace = false) => navigateTo(chatUrl(id), replace)
 /** Плагіни тягнуть іконки брендів (~60 КБ): вантажимо сторінку окремо, коли її відкривають. */
-const PluginsView = lazy(() => import('./components/Plugins.tsx').then((m) => ({ default: m.PluginsView })))
+const PluginsView = lazy(() => import('./components/plugins/PluginsView.tsx').then((m) => ({ default: m.PluginsView })))
 
 const goJobs = (r: JobsRoute | null) => (r ? navigateTo(jobsUrl(r)) : navigate(null))
 const goKb = (r: KbRoute) => navigateTo(kbUrl(r))
@@ -335,7 +335,7 @@ export default function App() {
             onNew={() => newChat()}
             onKb={() => goKb({ kind: 'home' })}
             kbActive={route.kind === 'kb'}
-            onPlugins={() => navigateTo(pluginsUrl(null))}
+            onPlugins={() => navigateTo(pluginsUrl())}
             pluginsActive={route.kind === 'plugins'}
             onSettings={() => {
               if (isNarrow()) setSidebar(false)
@@ -385,7 +385,7 @@ export default function App() {
           />
         ) : route.kind === 'plugins' ? (
           <Suspense fallback={null}>
-            <PluginsView name={route.name} sidebarOpen={sidebar && !narrow} openSidebar={() => setSidebar(true)} version={store.pluginsVersion} />
+            <PluginsView tab={route.tab} id={route.id} sidebarOpen={sidebar && !narrow} openSidebar={() => setSidebar(true)} version={store.pluginsVersion} />
           </Suspense>
         ) : route.kind === 'jobs' ? (
           <JobsView route={route.jobs} go={goJobs} sidebarOpen={sidebar && !narrow} openSidebar={() => setSidebar(true)} flash={flash} />
