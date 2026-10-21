@@ -27,6 +27,9 @@ First public release. Tested with Hermes Agent 0.22.
 - Versioned database migrations; tests and CI.
 - Unread replies: chats Hermes wrote to while you were away get a count and move to a «Нові» group at the top;
   the count also shows on the app icon, the tab title and the menu button. Muted chats keep a grey count in place.
+- Choice questions: Hermes's `clarify` questions show as numbered option rows (recommended one marked, multi-select
+  with checkboxes); typing in the message box answers the question with your own text. The `webchat` plugin asks
+  Hermes to offer options this way instead of listing them in prose.
 
 ### Security
 - Server survives malformed URLs, a missing Hermes Python and unreadable files instead of crashing.

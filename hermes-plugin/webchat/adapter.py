@@ -212,8 +212,26 @@ def _is_connected(config) -> bool:
     return bool(_token())
 
 
+# Чат показує питання інструмента clarify карткою з варіантами-кнопками й полем для своєї відповіді.
+# Без підказки модель зазвичай перелічує варіанти текстом, і на них не натиснеш.
+CHOICES_HINT = (
+    "Offering choices: when you need the user to pick between a few concrete options before you continue "
+    "(\"A or B?\", \"which one?\", numbered alternatives), call the clarify tool with them as choices instead of "
+    "listing them in prose. The user's chat shows each choice as a tappable button and always lets them type "
+    "their own answer, so keep labels short (details go in the question), up to 4, recommended first. "
+    "Don't ask about things you can reasonably decide yourself."
+)
+
+
+def _choices_section(info) -> str:
+    """Лише сесії, де є картка: чат створює їх як «cli» (так само й класичний термінал Hermes, у нього своя панель)."""
+    return CHOICES_HINT if info.get("platform") == "cli" else ""
+
+
 def register(ctx) -> None:
     """Точка входу плагіна."""
+    if hasattr(ctx, "register_system_prompt_section"):
+        ctx.register_system_prompt_section("webchat-choices", _choices_section)
     ctx.register_platform(
         name=NAME,
         label="Веб-чат",

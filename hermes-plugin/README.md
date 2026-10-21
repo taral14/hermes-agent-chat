@@ -2,7 +2,9 @@
 
 *English summary.* Makes Hermes Chat a delivery target in Hermes, like Telegram: scheduled-task results and the
 `send_message` tool arrive in the chat as messages with a push notification. Conversations themselves use the
-native gateway protocol and do not need this plugin.
+native gateway protocol and do not need this plugin. The plugin also adds a short system-prompt section to `cli`
+sessions (the chat creates its sessions as `cli`): offer a few concrete options through the `clarify` tool, which the
+chat shows as buttons, instead of listing them in prose.
 
 ```sh
 npm run setup:hermes        # from the chat directory; the chat must have started once (it creates the hook key)
@@ -20,6 +22,10 @@ Channels: `webchat:<chat id>` — a specific conversation (this is how tasks cre
 
 Робить веб-чат адресою доставки Hermes, як Telegram. Лише надсилання: результати задач за розкладом
 і інструмент `send_message` приходять у чат повідомленнями з пушем. Розмови йдуть окремо, рідним протоколом.
+
+Ще плагін додає в системну підказку сесій `cli` (чат створює свої сесії саме так) короткий розділ: коли треба
+вибрати з кількох варіантів, Hermes питає інструментом `clarify`, і чат показує варіанти кнопками з полем для
+своєї відповіді. Розділ діє з наступної нової сесії.
 
 ## Встановлення
 

@@ -8,6 +8,7 @@ import { JobsView, type JobsRoute } from './components/Jobs.tsx'
 import { JobSheet } from './components/JobSheet.tsx'
 import { type KbRoute, KbView } from './components/Kb.tsx'
 import { Login } from './components/Login.tsx'
+import { answerClarify } from './components/message/Prompts.tsx'
 import type { MessageActions } from './components/MessageView.tsx'
 import { ModelPicker } from './components/ModelPicker.tsx'
 import { Notifications } from './components/Notifications.tsx'
@@ -21,7 +22,7 @@ import { holdKeyboard } from './keyboard.ts'
 import { kb, obsidianUriToPath } from './kb.ts'
 import { reportPresence } from './push.ts'
 import { chatUrl, jobsUrl, kbUrl, navigateTo, pluginsUrl, useRoute } from './router.ts'
-import type { Attachment, ChatMode, ChatPrefs, ModelChoice, ModelOptions } from './shared.ts'
+import type { Attachment, ChatMode, ChatPrefs, ModelChoice, ModelOptions, Part } from './shared.ts'
 
 const ACTIVE = new Set(['queued', 'running', 'stopping'])
 const NARROW = '(max-width: 768px)'
@@ -103,6 +104,7 @@ export default function App() {
   const unreadTotal = chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0)
   const list = currentId ? messages[currentId] : undefined
   const runningMsg = list?.findLast((m) => m.role === 'assistant' && ACTIVE.has(m.status)) ?? null
+  const asking = runningMsg?.parts.find((p): p is Extract<Part, { type: 'clarify' }> => p.type === 'clarify' && p.state === 'pending') ?? null
 
   // ---------- Вхід і початкові дані ----------
 
@@ -251,7 +253,9 @@ export default function App() {
   const steer = async (text: string) => {
     if (!runningMsg) return false
     try {
-      await api.steer(runningMsg.id, text)
+      // Hermes чекає відповіді на питання: текст із поля — це «свій варіант», а не доповнення задачі.
+      if (asking) await answerClarify(runningMsg, asking, text)
+      else await api.steer(runningMsg.id, text)
       return true
     } catch (e) {
       flash(e)
@@ -316,6 +320,7 @@ export default function App() {
       ref={composer}
       draftKey={currentId ?? 'new'}
       running={Boolean(runningMsg)}
+      answering={Boolean(asking)}
       onSend={send}
       onStop={stop}
       onSteer={steer}

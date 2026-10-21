@@ -12,6 +12,8 @@ export type ComposerHandle = { addFiles: (files: FileList | File[]) => void; foc
 type Props = {
   ref?: Ref<ComposerHandle>
   running: boolean
+  /** Hermes чекає відповіді на питання: надіслане з поля стає своєю відповіддю. */
+  answering?: boolean
   onSend: (text: string, attachments: Attachment[]) => Promise<boolean>
   onStop: () => void
   onSteer: (text: string) => Promise<boolean>
@@ -81,7 +83,7 @@ const drafts = new Map<string, string>()
 /** Підготувати текст у полі вводу чату (напр. «Обговорити з Hermes» з бази знань). */
 export const setDraft = (key: string, text: string) => drafts.set(key, text)
 
-export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, commands, mode, onMode, modelSlot }: Props) {
+export function Composer({ ref, running, answering, onSend, onStop, onSteer, draftKey, commands, mode, onMode, modelSlot }: Props) {
   const [text, setText] = useState(() => drafts.get(draftKey) ?? '')
   const [files, setFiles] = useState<Pending[]>([])
   const [busy, setBusy] = useState(false)
@@ -257,7 +259,7 @@ export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, comm
           ref={area}
           rows={1}
           value={text}
-          placeholder={running ? 'Додати до поточної задачі…' : commands ? 'Напиши Hermes або «/» для команд' : 'Напиши Hermes'}
+          placeholder={answering ? 'Своя відповідь…' : running ? 'Додати до поточної задачі…' : commands ? 'Напиши Hermes або «/» для команд' : 'Напиши Hermes'}
           onChange={(e) => {
             setText(e.target.value)
             drafts.set(draftKey, e.target.value)
@@ -317,7 +319,11 @@ export function Composer({ ref, running, onSend, onStop, onSteer, draftKey, comm
           {mode && onMode && <ModePicker mode={mode} onMode={onMode} />}
           <div className="composer-spacer" />
           {modelSlot}
-          {running && text.trim() ? (
+          {running && answering && text.trim() ? (
+            <button type="button" className="send-btn" title="Відповісти" aria-label="Відповісти" disabled={!canSend} onClick={() => void submit()}>
+              {busy ? <Loader2 size={18} className="spin" /> : <ArrowUp size={20} strokeWidth={2.4} />}
+            </button>
+          ) : running && text.trim() ? (
             <button type="button" className="send-btn" title="Додати до поточної задачі" aria-label="Додати до задачі" disabled={!canSend} onClick={() => void submit()}>
               <MessageSquarePlus size={18} />
             </button>

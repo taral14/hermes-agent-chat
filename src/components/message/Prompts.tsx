@@ -1,5 +1,5 @@
 // Запити Hermes на рішення: дозвіл на команду й уточнювальне питання.
-import { CircleCheck, CircleHelp, CircleX, ShieldAlert } from 'lucide-react'
+import { Check, CircleCheck, CircleHelp, CircleX, Loader2, PenLine, ShieldAlert } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../../api.ts'
 import type { Message, Part } from '../../shared.ts'
@@ -64,20 +64,38 @@ export function ApprovalCard({ m, p }: { m: Message; p: Extract<Part, { type: 'a
   )
 }
 
+/** Hermes позначає перший варіант як рекомендований підписом «(Recommended)»: показуємо його окремою позначкою. */
+const RECOMMENDED = /\s*\(recommended\)\s*$/i
+const choiceLabel = (c: string) => c.replace(RECOMMENDED, '').trim()
+
+/** Відповідь на питання з кількома виборами приходить JSON-масивом: показуємо списком. */
+export function clarifyAnswerText(answer: string): string {
+  try {
+    const v: unknown = JSON.parse(answer)
+    if (Array.isArray(v)) return v.map((x) => choiceLabel(String(x))).join(', ')
+  } catch {
+    /* звичайний текст */
+  }
+  return choiceLabel(answer)
+}
+
+/** Відповісти на питання Hermes. Своя відповідь пишеться в полі вводу (див. App: поки питання чекає, поле відповідає на нього). */
+export async function answerClarify(m: Message, p: Extract<Part, { type: 'clarify' }>, value: string) {
+  await api.clarify(m.id, p.promptId, p.generation, value)
+}
+
 export function ClarifyCard({ m, p }: { m: Message; p: Extract<Part, { type: 'clarify' }> }) {
-  const [busy, setBusy] = useState(false)
-  const [text, setText] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [err, setErr] = useState('')
-  const answer = async (value: string) => {
-    if (!value.trim()) return
-    setBusy(true)
+  const answer = async (value: string, key = value) => {
+    setBusy(key)
     setErr('')
     try {
-      await api.clarify(m.id, p.promptId, p.generation, value)
+      await answerClarify(m, p, value)
     } catch (e) {
       setErr((e as Error).message)
-      setBusy(false)
+      setBusy(null)
     }
   }
   if (p.state !== 'pending') {
@@ -86,58 +104,55 @@ export function ClarifyCard({ m, p }: { m: Message; p: Extract<Part, { type: 'cl
         <CircleHelp size={15} />
         <span>
           {p.question}
-          {p.answer ? <> — <b>{p.answer}</b></> : ' (без відповіді)'}
+          {p.answer ? <> — <b>{clarifyAnswerText(p.answer)}</b></> : ' (без відповіді)'}
         </span>
       </div>
     )
   }
+  const toggle = (c: string) => setPicked((x) => (x.includes(c) ? x.filter((y) => y !== c) : [...x, c]))
   return (
     <div className="prompt-card prompt-clarify">
-      <div className="prompt-title">
-        <CircleHelp size={18} />
-        <span>Hermes уточнює</span>
-      </div>
       <div className="prompt-question">
         <Markdown text={p.question} />
       </div>
       {p.choices.length > 0 && (
-        <div className="prompt-actions">
-          {p.choices.map((c) =>
-            p.multi ? (
+        <div className="clarify-options">
+          {p.choices.map((c, i) => {
+            const label = choiceLabel(c)
+            const on = picked.includes(c)
+            return (
               <button
                 key={c}
                 type="button"
-                className={`btn ${picked.includes(c) ? 'btn-selected' : ''}`}
-                disabled={busy}
-                onClick={() => setPicked((x) => (x.includes(c) ? x.filter((y) => y !== c) : [...x, c]))}
+                className={`clarify-option ${on ? 'is-on' : ''}`}
+                disabled={busy !== null}
+                aria-pressed={p.multi ? on : undefined}
+                onClick={() => (p.multi ? toggle(c) : void answer(c))}
               >
-                {c}
+                <span className={`clarify-mark ${p.multi ? 'is-box' : ''}`}>{p.multi ? on && <Check size={14} strokeWidth={3} /> : i + 1}</span>
+                <span className="clarify-label">{label}</span>
+                {label !== c.trim() && <span className="clarify-rec">Рекомендую</span>}
+                {busy === c && <Loader2 size={16} className="spin" />}
               </button>
-            ) : (
-              <button key={c} type="button" className="btn" disabled={busy} onClick={() => void answer(c)}>
-                {c}
-              </button>
-            ),
-          )}
-          {p.multi && (
-            <button type="button" className="btn btn-primary" disabled={busy || !picked.length} onClick={() => void answer(picked.join(', '))}>
-              Відповісти
-            </button>
-          )}
+            )
+          })}
         </div>
       )}
-      <form
-        className="prompt-input"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void answer(text)
-        }}
-      >
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Своя відповідь…" disabled={busy} />
-        <button type="submit" className="btn btn-primary" disabled={busy || !text.trim()}>
-          Надіслати
+      {p.multi && (
+        <button
+          type="button"
+          className="btn btn-primary clarify-submit"
+          disabled={busy !== null || !picked.length}
+          onClick={() => void answer(JSON.stringify(picked.map(choiceLabel)), 'multi')}
+        >
+          {busy === 'multi' && <Loader2 size={16} className="spin" />}
+          Відповісти
         </button>
-      </form>
+      )}
+      <div className="clarify-hint">
+        <PenLine size={14} />
+        {p.choices.length ? 'Або напиши свій варіант у полі внизу' : 'Напиши відповідь у полі внизу'}
+      </div>
       {err && <div className="prompt-err">{err}</div>}
     </div>
   )
