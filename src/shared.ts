@@ -93,6 +93,8 @@ export type Chat = {
   createdAt: number
   updatedAt: number
   running: boolean
+  /** Відповіді Hermes, які людина ще не бачила (чат не був відкритий, коли вони прийшли). */
+  unread: number
   /** Чат працює через рідний протокол Hermes (команди, повтор, редагування, відгалуження). */
   native?: boolean
   control?: ChatControl

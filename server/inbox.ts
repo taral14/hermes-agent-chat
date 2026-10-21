@@ -91,6 +91,8 @@ export function receiveFromHermes(body: { channel?: unknown; text?: unknown; med
     const last = listMessages(chatId).at(-1)
     if (last && last.role === 'assistant' && last.parts.some((p) => p.type === 'delivered') && now - last.createdAt < 10 * 60_000) {
       last.attachments = [...last.attachments, ...attachments]
+      // Нові файли — знову непрочитане.
+      last.finishedAt = now
       saveMessage(last)
       updateChat(chatId, { touch: true })
       return { message: last, created: false }

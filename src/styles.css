@@ -26,6 +26,7 @@
   --warn-bg: #fff7ed;
   --warn-border: #fed7aa;
   --ok: #10a37f;
+  --unread: #0a84ff;
   --scrim: rgba(0, 0, 0, 0.35);
   color-scheme: light;
 }
@@ -6805,4 +6806,49 @@ body.viewer-open {
   .welcome .composer-hint {
     display: block;
   }
+}
+
+/* ---------- Непрочитане ---------- */
+
+.chat-item.is-unread .chat-title {
+  font-weight: 600;
+}
+
+.chat-unread {
+  flex-shrink: 0;
+  min-width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--unread);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-job-state + .chat-unread {
+  margin-left: 6px;
+}
+
+.chat-unread.is-muted {
+  background: var(--text-3);
+}
+
+.m-menu-btn {
+  position: relative;
+}
+
+.menu-unread {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--unread);
+  box-shadow: 0 0 0 2px var(--bg);
 }

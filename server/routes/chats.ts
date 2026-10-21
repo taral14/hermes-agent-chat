@@ -12,6 +12,7 @@ import {
   listChats,
   listLists,
   listMessages,
+  markRead,
   publicMessage,
   updateChat,
   updateList,
@@ -212,6 +213,14 @@ export async function chatRoutes({ req, res, path, method }: Ctx): Promise<boole
     await native(() => nativeRewind(chat, userId, b.text))
     emitChat(chat.id)
     return send(res, 200, chatView(chat))
+  }
+
+  m = path.match(/^\/api\/chats\/([\w-]+)\/read$/)
+  if (m && method === 'POST') {
+    if (!getChat(m[1]!)) throw new HttpError(404, 'Чат не знайдено')
+    // Інші пристрої теж знімуть позначку.
+    if (markRead(m[1]!)) emitChat(m[1]!)
+    return send(res, 200, { ok: true })
   }
 
   m = path.match(/^\/api\/chats\/([\w-]+)\/control$/)

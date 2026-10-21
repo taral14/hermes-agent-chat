@@ -159,6 +159,12 @@ export function useChats(enabled: boolean, events: Events) {
     [optimistic, loadChats],
   )
 
+  /** Чат на екрані: позначку знімаємо одразу, сервер передасть це іншим пристроям. */
+  const markRead = useCallback((id: string) => {
+    setChats((c) => c.map((x) => (x.id === id && x.unread ? { ...x, unread: 0 } : x)))
+    api.markRead(id).catch(() => {})
+  }, [])
+
   const removeChat = useCallback(
     (id: string) => {
       optimistic(() => setChats((c) => c.filter((x) => x.id !== id)), api.deleteChat(id), loadChats)
@@ -201,5 +207,5 @@ export function useChats(enabled: boolean, events: Events) {
     setMessages({})
   }, [])
 
-  return { chats, lists, messages, kbVersion, pluginsVersion, loadChat, applyChat, patchChat, removeChat, createList, renameList, deleteList, clearAll }
+  return { chats, lists, messages, kbVersion, pluginsVersion, loadChat, applyChat, patchChat, markRead, removeChat, createList, renameList, deleteList, clearAll }
 }

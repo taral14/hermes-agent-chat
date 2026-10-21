@@ -102,6 +102,11 @@ const MIGRATIONS: (() => void)[] = [
   },
   // 2: переклади описів (ключ — хеш мови й тексту), щоб кожен текст перекладати один раз.
   () => db.exec(`CREATE TABLE translations (key TEXT PRIMARY KEY, text TEXT NOT NULL, created_at INTEGER NOT NULL)`),
+  // 3: до якого моменту людина прочитала чат. Наявні чати вважаємо прочитаними.
+  () => {
+    db.exec(`ALTER TABLE chats ADD COLUMN read_at INTEGER NOT NULL DEFAULT 0`)
+    db.prepare('UPDATE chats SET read_at = ?').run(Date.now())
+  },
 ]
 
 function migrate() {
@@ -147,6 +152,7 @@ function toChat(r: Row): ChatRow {
     createdAt: Number(r.created_at),
     updatedAt: Number(r.updated_at),
     running: Boolean(r.running),
+    unread: Number(r.unread ?? 0),
     engine: str(r.engine) === 'native' ? 'native' : 'api',
     mode: (['ask', 'auto', 'plan'].includes(str(r.mode)) ? str(r.mode) : 'auto') as ChatMode,
     listId: r.list_id == null ? null : str(r.list_id),
@@ -182,34 +188,39 @@ export function publicMessage({ runId, lastSeq: _l, ...msg }: MessageRow): Messa
 }
 
 const RUNNING = `EXISTS (SELECT 1 FROM messages m WHERE m.chat_id = c.id AND m.status IN ('queued','running','stopping'))`
+/** Відповіді Hermes, що завершились після того, як людина востаннє дивилась на чат. */
+const UNREAD = `(SELECT COUNT(*) FROM messages m WHERE m.chat_id = c.id AND m.role = 'assistant' AND m.status IN ('done','error') AND COALESCE(m.finished_at, m.created_at) > c.read_at)`
+const CHAT = `c.*, ${RUNNING} AS running, ${UNREAD} AS unread`
 
 export function listChats(): ChatRow[] {
   return db
-    .prepare(`SELECT c.*, ${RUNNING} AS running FROM chats c ORDER BY c.pinned DESC, c.updated_at DESC`)
+    .prepare(`SELECT ${CHAT} FROM chats c ORDER BY c.pinned DESC, c.updated_at DESC`)
     .all()
     .map(toChat)
 }
 
 export function getChat(id: string): ChatRow | null {
-  const r = db.prepare(`SELECT c.*, ${RUNNING} AS running FROM chats c WHERE c.id = ?`).get(id)
+  const r = db.prepare(`SELECT ${CHAT} FROM chats c WHERE c.id = ?`).get(id)
   return r ? toChat(r) : null
 }
 
 export function createChat(id: string, sessionId: string, model: ModelChoice, engine: 'api' | 'native' = 'native'): ChatRow {
   const now = Date.now()
-  db.prepare('INSERT INTO chats (id, session_id, model, engine, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+  // read_at на мить раніше: перше повідомлення від Hermes у щойно створеному чаті (вхідні) — непрочитане.
+  db.prepare('INSERT INTO chats (id, session_id, model, engine, created_at, updated_at, read_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
     id,
     sessionId,
     model ? JSON.stringify(model) : null,
     engine,
     now,
     now,
+    now - 1,
   )
   return getChat(id)!
 }
 
 export function getChatBySession(sessionId: string): ChatRow | null {
-  const r = db.prepare(`SELECT c.*, ${RUNNING} AS running FROM chats c WHERE c.session_id = ?`).get(sessionId)
+  const r = db.prepare(`SELECT ${CHAT} FROM chats c WHERE c.session_id = ?`).get(sessionId)
   return r ? toChat(r) : null
 }
 
@@ -261,6 +272,19 @@ export function updateChat(
   }
   if (!sets.length) return
   db.prepare(`UPDATE chats SET ${sets.join(', ')} WHERE id = ?`).run(...args, id)
+}
+
+/** Людина подивилась на чат: усе, що Hermes написав досі, прочитане. Повертає, чи щось змінилось. */
+export function markRead(id: string): boolean {
+  const had = getChat(id)?.unread ?? 0
+  db.prepare('UPDATE chats SET read_at = ? WHERE id = ?').run(Date.now(), id)
+  return had > 0
+}
+
+/** Скільки всього непрочитаних відповідей у чатах, крім вказаних (без сповіщень): для значка на іконці. */
+export function unreadTotal(skip: string[] = []): number {
+  const rows = db.prepare(`SELECT c.id, ${UNREAD} AS unread FROM chats c`).all() as { id: string; unread: number }[]
+  return rows.reduce((n, r) => n + (skip.includes(r.id) ? 0 : Number(r.unread)), 0)
 }
 
 export function deleteChat(id: string) {

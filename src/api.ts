@@ -39,6 +39,7 @@ export const api = {
   patchChat: (id: string, patch: { title?: string; pinned?: boolean; model?: ModelChoice; mode?: ChatMode; listId?: string | null; muted?: boolean }) =>
     req<Chat>('PATCH', `/api/chats/${id}`, patch),
   deleteChat: (id: string) => req('DELETE', `/api/chats/${id}`),
+  markRead: (id: string) => req('POST', `/api/chats/${id}/read`),
   send: (body: { chatId?: string; text: string; attachments: string[]; model?: ModelChoice; mode?: ChatMode; listId?: string }) =>
     req<{ chat: Chat; messages: Message[] }>('POST', '/api/messages', body),
   stop: (messageId: string) => req('POST', `/api/messages/${messageId}/stop`),

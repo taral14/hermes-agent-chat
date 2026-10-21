@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import webpush from 'web-push'
 import type { Message, Part } from '../src/shared.ts'
 import { VAPID_SUBJECT } from './config.ts'
-import { DATA_DIR, type PushSub, deletePushSub, getChat, getSetting, listPushSubs, setSetting } from './db.ts'
+import { DATA_DIR, type PushSub, deletePushSub, getChat, getSetting, listPushSubs, setSetting, unreadTotal } from './db.ts'
 
 const VAPID_FILE = join(DATA_DIR, '.vapid.json')
 
@@ -25,6 +25,8 @@ export type Payload = {
   requireInteraction?: boolean
   actions?: { action: string; title: string }[]
   data?: Record<string, unknown>
+  /** Число на іконці застосунку: непрочитані відповіді в чатах зі сповіщеннями. */
+  badge?: number
 }
 
 type Kind = 'replies' | 'prompts' | 'jobs'
@@ -41,6 +43,7 @@ async function deliver(sub: PushSub, p: Payload, urgency: 'normal' | 'high' = 'n
 }
 
 export async function send(kind: Kind, p: Payload, urgency: 'normal' | 'high' = 'normal') {
+  p = { badge: unreadTotal(mutedList()), ...p }
   await Promise.all(listPushSubs().filter((s) => s.settings[kind]).map((s) => deliver(s, p, urgency)))
 }
 

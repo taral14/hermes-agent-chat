@@ -16,6 +16,7 @@ import { Settings } from './components/Settings.tsx'
 import { ShareSheet } from './components/ShareSheet.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { useChats } from './hooks/useChats.ts'
+import { useVisible } from './hooks/useVisible.ts'
 import { holdKeyboard } from './keyboard.ts'
 import { kb, obsidianUriToPath } from './kb.ts'
 import { reportPresence } from './push.ts'
@@ -98,6 +99,8 @@ export default function App() {
   const composer = useRef<ComposerHandle>(null)
 
   const current = chats.find((c) => c.id === currentId) ?? null
+  /** Непрочитане в чатах зі сповіщеннями: число на іконці застосунку й на кнопці меню. */
+  const unreadTotal = chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0)
   const list = currentId ? messages[currentId] : undefined
   const runningMsg = list?.findLast((m) => m.role === 'assistant' && ACTIVE.has(m.status)) ?? null
 
@@ -190,8 +193,23 @@ export default function App() {
     }
   }, [auth, currentId])
 
+  // Чат на екрані — прочитаний: і той, що відкрили, і відповідь, що прийшла, поки на нього дивляться.
+  // На телефоні відкрита панель закриває чат, тож тоді ще не прочитано.
+  const visible = useVisible()
+  const currentUnread = current?.unread ?? 0
+  const { markRead } = store
+  const covered = narrow && sidebar
   useEffect(() => {
-    document.title =
+    if (currentId && currentUnread && visible && !covered) markRead(currentId)
+  }, [currentId, currentUnread, visible, covered, markRead])
+
+  useEffect(() => {
+    if (auth !== 'in' || !('setAppBadge' in navigator)) return
+    void (unreadTotal ? navigator.setAppBadge(unreadTotal) : navigator.clearAppBadge()).catch(() => {})
+  }, [auth, unreadTotal])
+
+  useEffect(() => {
+    const page =
       route.kind === 'kb'
         ? 'База знань · Hermes'
         : route.kind === 'jobs'
@@ -201,7 +219,8 @@ export default function App() {
             : current?.title
               ? `${current.title} · Hermes`
               : 'Hermes'
-  }, [current?.title, route.kind])
+    document.title = unreadTotal ? `(${unreadTotal}) ${page}` : page
+  }, [current?.title, route.kind, unreadTotal])
 
   // ---------- Дії ----------
 
@@ -363,6 +382,7 @@ export default function App() {
             onNewInList={(listId) => newChat(listId)}
             onRename={(id, title) => store.patchChat(id, { title })}
             onPin={(id, pinned) => store.patchChat(id, { pinned })}
+            onRead={markRead}
             onDelete={store.removeChat}
           />
         </>
@@ -418,6 +438,7 @@ export default function App() {
               )
             }
             showNav={!sidebar || narrow}
+            unread={unreadTotal - (current && !current.muted ? current.unread : 0)}
             onOpenSidebar={() => setSidebar(true)}
             onNewChat={() => newChat()}
             onShare={() => setSharing(true)}

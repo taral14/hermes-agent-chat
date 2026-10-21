@@ -19,7 +19,9 @@ self.addEventListener('push', (event) => {
     actions: p.actions || [],
     data: { url: p.url || '/', ...p.data },
   }
-  event.waitUntil(self.registration.showNotification(p.title || 'Hermes', options))
+  // Значок на іконці застосунку: скільки непрочитаного (сервер рахує). Відкритий застосунок оновить його сам.
+  const badge = typeof p.badge === 'number' && self.navigator.setAppBadge ? self.navigator.setAppBadge(p.badge).catch(() => {}) : null
+  event.waitUntil(Promise.all([self.registration.showNotification(p.title || 'Hermes', options), badge]))
 })
 
 async function openUrl(url) {

@@ -4,6 +4,7 @@ import {
   Blocks,
   BookOpen,
   Check,
+  CheckCheck,
   ChevronRight,
   Folder,
   FolderMinus,
@@ -20,7 +21,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { Chat, ChatList } from '../shared.ts'
 
@@ -34,6 +35,7 @@ type Props = {
   onNew: () => void
   onRename: (id: string, title: string) => void
   onPin: (id: string, pinned: boolean) => void
+  onRead: (id: string) => void
   onDelete: (id: string) => void
   onMoveToList: (chatId: string, listId: string | null) => void
   onCreateList: (name: string) => Promise<ChatList | null>
@@ -161,11 +163,12 @@ type ChatItemProps = {
   onSelect: () => void
   onRename: (t: string) => void
   onPin: () => void
+  onRead: () => void
   onDelete: () => void
   onMove: (listId: string | null) => void
 }
 
-function ChatItem({ chat, active, narrow, lists, indent, onSelect, onRename, onPin, onDelete, onMove }: ChatItemProps) {
+function ChatItem({ chat, active, narrow, lists, indent, onSelect, onRename, onPin, onRead, onDelete, onMove }: ChatItemProps) {
   const [menu, setMenu] = useState<null | 'main' | 'lists' | 'confirm'>(null)
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(chat.title)
@@ -191,6 +194,8 @@ function ChatItem({ chat, active, narrow, lists, indent, onSelect, onRename, onP
   }
 
   const inList = lists.find((l) => l.id === chat.listId)
+  // Відкритий чат людина й так бачить: позначка там лише блимала б.
+  const unread = active ? 0 : chat.unread
   const run = (fn: () => void) => () => {
     close()
     fn()
@@ -211,6 +216,7 @@ function ChatItem({ chat, active, narrow, lists, indent, onSelect, onRename, onP
     if (chat.listId) actions.push({ label: 'Прибрати зі списку', icon: <FolderMinus size={sz} />, run: run(() => onMove(null)) })
   } else {
     actions = [
+      ...(unread ? [{ label: 'Позначити прочитаним', icon: <CheckCheck size={sz} />, run: run(onRead) }] : []),
       {
         label: 'Перейменувати',
         icon: <Pencil size={sz} />,
@@ -226,7 +232,10 @@ function ChatItem({ chat, active, narrow, lists, indent, onSelect, onRename, onP
   }
 
   return (
-    <div ref={box} className={`chat-item ${active ? 'is-active' : ''} ${menu && !narrow ? 'has-menu' : ''} ${indent ? 'is-indented' : ''}`}>
+    <div
+      ref={box}
+      className={`chat-item ${active ? 'is-active' : ''} ${unread ? 'is-unread' : ''} ${menu && !narrow ? 'has-menu' : ''} ${indent ? 'is-indented' : ''}`}
+    >
       <button
         type="button"
         className="chat-link"
@@ -249,6 +258,11 @@ function ChatItem({ chat, active, narrow, lists, indent, onSelect, onRename, onP
             </span>
           )
         ) : null}
+        {unread > 0 && (
+          <span className={`chat-unread ${chat.muted ? 'is-muted' : ''}`} title={chat.muted ? 'Непрочитане (сповіщення вимкнені)' : 'Непрочитане'}>
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
       </button>
       {!narrow && (
         <button type="button" className="chat-more" aria-label="Дії" onClick={() => setMenu((m) => (m ? null : 'main'))}>
@@ -397,11 +411,27 @@ export function Sidebar(p: Props) {
     })
 
   const q = query.trim().toLowerCase()
+
+  // «Нові»: чати, куди Hermes написав, а людина ще не дивилась, — нагорі, хоч би де вони лежали (крім чатів без сповіщень).
+  // Відкритий звідти чат лишається в групі, поки людина в ньому: інакше рядок стрибнув би з-під курсора.
+  const [held, setHeld] = useState<{ id: string | null; keep: boolean }>({ id: null, keep: false })
+  if (held.id !== p.currentId) {
+    const c = p.chats.find((x) => x.id === p.currentId)
+    setHeld({ id: p.currentId, keep: Boolean(c?.unread && !c.muted) })
+  }
+  const heldId = held.keep ? held.id : null
+  const lifted = useCallback(
+    (c: Chat) => !q && ((c.unread > 0 && !c.muted && c.id !== p.currentId) || c.id === heldId),
+    [q, p.currentId, heldId],
+  )
+  const fresh = p.chats.filter(lifted).sort((a, b) => b.updatedAt - a.updatedAt)
+
   const groups = useMemo(() => {
     const listIds = new Set(p.lists.map((l) => l.id))
     const list = q ? p.chats.filter((c) => c.title.toLowerCase().includes(q)) : p.chats
     const out: [string, Chat[]][] = []
     for (const c of list) {
+      if (lifted(c)) continue
       // Без пошуку чати зі списків показуємо лише у своєму списку; закріплені — у «Закріплено»;
       // чати з задачами за розкладом — у групі «Задачі».
       if (!q && !c.pinned && c.jobs?.length) continue
@@ -412,7 +442,7 @@ export function Sidebar(p: Props) {
       else out.push([g, [c]])
     }
     return out
-  }, [p.chats, q, p.narrow, p.lists])
+  }, [p.chats, q, p.narrow, p.lists, lifted])
 
   const toggleSearch = () => {
     setSearching((s) => !s)
@@ -430,13 +460,14 @@ export function Sidebar(p: Props) {
       onSelect={() => p.onSelect(c.id)}
       onRename={(t) => p.onRename(c.id, t)}
       onPin={() => p.onPin(c.id, !c.pinned)}
+      onRead={() => p.onRead(c.id)}
       onDelete={() => p.onDelete(c.id)}
       onMove={(l) => p.onMoveToList(c.id, l)}
     />
   )
 
   // Динамічна група: чати, куди доставляють результати задачі за розкладом (сервер стежить за Hermes).
-  const taskChats = p.chats.filter((c) => !c.pinned && c.jobs?.length)
+  const taskChats = p.chats.filter((c) => !c.pinned && c.jobs?.length && !lifted(c))
   const pinned = groups.find(([g]) => g === 'Закріплено')
   const rest = groups.filter(([g]) => g !== 'Закріплено')
 
@@ -491,6 +522,13 @@ export function Sidebar(p: Props) {
               </span>
               <span>Плагіни</span>
             </button>
+          </div>
+        )}
+
+        {fresh.length > 0 && (
+          <div className="chat-group">
+            <div className="chat-group-title">Нові</div>
+            {fresh.map((c) => item(c))}
           </div>
         )}
 
@@ -554,7 +592,7 @@ export function Sidebar(p: Props) {
               <ListBlock
                 key={l.id}
                 list={l}
-                chats={p.chats.filter((c) => c.listId === l.id && !c.pinned && !c.jobs?.length)}
+                chats={p.chats.filter((c) => c.listId === l.id && !c.pinned && !c.jobs?.length && !lifted(c))}
                 p={p}
                 closed={closedLists.has(l.id)}
                 toggle={() => toggleList(l.id)}

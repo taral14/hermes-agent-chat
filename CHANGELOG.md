@@ -25,6 +25,8 @@ First public release. Tested with Hermes Agent 0.22.
 - `npm run setup` (first run), `npm run doctor` (Hermes version and time zone checks), Hermes `webchat` plugin,
   iCloud vault mirror for macOS.
 - Versioned database migrations; tests and CI.
+- Unread replies: chats Hermes wrote to while you were away get a count and move to a «Нові» group at the top;
+  the count also shows on the app icon, the tab title and the menu button. Muted chats keep a grey count in place.
 
 ### Security
 - Server survives malformed URLs, a missing Hermes Python and unreadable files instead of crashing.

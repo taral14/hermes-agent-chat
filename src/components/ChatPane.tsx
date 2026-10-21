@@ -19,6 +19,8 @@ type Props = {
   welcomeNote?: ReactNode
   /** Показати кнопки меню й нового чату в шапці (панель згорнута або вузький екран). */
   showNav: boolean
+  /** Непрочитане в інших чатах: позначка на кнопці панелі. */
+  unread: number
   onOpenSidebar: () => void
   onNewChat: () => void
   onShare: () => void
@@ -26,7 +28,7 @@ type Props = {
   flash: (e: unknown) => void
 }
 
-export function ChatPane({ chat, list, loading, actions, composer, welcomeNote, showNav, onOpenSidebar, onNewChat, onShare, onQuote, flash }: Props) {
+export function ChatPane({ chat, list, loading, actions, composer, welcomeNote, showNav, unread, onOpenSidebar, onNewChat, onShare, onQuote, flash }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   /** Тримати розмову внизу, поки людина сама не прокрутила вгору. */
   const stick = useRef(true)
@@ -71,13 +73,20 @@ export function ChatPane({ chat, list, loading, actions, composer, welcomeNote, 
       <div className="topbar-left">
         {showNav && (
           <>
-            <button type="button" className="icon-btn m-menu-btn" aria-label="Показати панель" title="Показати панель" onClick={onOpenSidebar}>
+            <button
+              type="button"
+              className="icon-btn m-menu-btn"
+              aria-label={unread ? `Показати панель, непрочитаних: ${unread}` : 'Показати панель'}
+              title="Показати панель"
+              onClick={onOpenSidebar}
+            >
               <span className="only-wide">
                 <PanelLeftOpen size={20} />
               </span>
               <span className="only-narrow">
                 <Menu size={20} />
               </span>
+              {unread > 0 && <span className="menu-unread" aria-hidden="true" />}
             </button>
             <button type="button" className="icon-btn only-wide" aria-label="Новий чат" title="Новий чат" onClick={onNewChat}>
               <SquarePen size={19} />
