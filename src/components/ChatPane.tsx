@@ -47,16 +47,18 @@ export function ChatPane({ chat, list, loading, actions, composer, welcomeNote, 
   }, [list])
 
   // Картинки, картки посилань і плеєри дорендерюються вже після повідомлень: тримаємо низ і тоді.
+  // І коли сама розмова стає нижчою (клавіатура на телефоні, панель мети): інакше низ ховається під полем вводу.
   const inner = useRef<HTMLDivElement>(null)
   const hasThread = Boolean(chat && list?.length)
   useEffect(() => {
     const box = inner.current
-    if (!box) return
+    const el = scroller.current
+    if (!box || !el) return
     const ro = new ResizeObserver(() => {
-      const el = scroller.current
-      if (el && stick.current) el.scrollTop = el.scrollHeight
+      if (stick.current) el.scrollTop = el.scrollHeight
     })
     ro.observe(box)
+    ro.observe(el)
     return () => ro.disconnect()
   }, [hasThread])
 

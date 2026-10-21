@@ -96,7 +96,8 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, dra
   useEffect(() => {
     setText(drafts.get(draftKey) ?? '')
     setFiles([])
-    area.current?.focus()
+    // На телефоні фокус відкрив би клавіатуру й закрив пів відповіді: там поле фокусує лише «Новий чат».
+    if (!matchMedia('(pointer: coarse)').matches) area.current?.focus()
   }, [draftKey])
 
   // Прев'ю картинок — blob-адреси: звільняємо пам'ять, щойно файл прибрано з поля.
