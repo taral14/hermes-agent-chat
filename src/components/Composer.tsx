@@ -339,7 +339,6 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, dra
           )}
         </div>
       </div>
-      <div className="composer-hint">Hermes виконує дії на своєму комп'ютері. Перевіряй важливе.</div>
     </div>
   )
 }

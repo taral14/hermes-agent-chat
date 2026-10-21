@@ -15,6 +15,8 @@ const root = document.documentElement
 function syncViewport() {
   root.style.setProperty('--app-h', `${vv ? vv.height : window.innerHeight}px`)
   root.style.setProperty('--app-top', `${vv ? Math.max(0, vv.offsetTop) : 0}px`)
+  // Клавіатура на iPhone зменшує лише visualViewport: так і впізнаємо, що вона відкрита.
+  root.classList.toggle('kb-open', Boolean(vv && window.innerHeight - vv.height > 120))
 }
 vv?.addEventListener('resize', syncViewport)
 vv?.addEventListener('scroll', syncViewport)

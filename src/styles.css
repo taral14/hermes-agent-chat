@@ -640,10 +640,6 @@ a {
   width: 100%;
 }
 
-.welcome .composer-hint {
-  display: none;
-}
-
 /* ---------- Стрічка повідомлень ---------- */
 
 .thread {
@@ -1539,8 +1535,13 @@ button.act-line:hover:not(:disabled) {
 
 .bottom {
   position: relative;
-  padding: 0 16px;
+  padding: 0 16px max(12px, env(safe-area-inset-bottom));
   flex-shrink: 0;
+}
+
+/* Відкрита клавіатура закриває смугу жестів унизу: відступ під неї вже не потрібен. */
+.kb-open .bottom {
+  padding-bottom: 8px;
 }
 
 .composer-wrap {
@@ -1674,14 +1675,6 @@ button.act-line:hover:not(:disabled) {
   justify-content: center;
 }
 
-.composer-hint {
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-3);
-  padding: 8px 0 10px;
-  padding-bottom: max(10px, env(safe-area-inset-bottom));
-}
-
 .to-bottom {
   position: absolute;
   left: 50%;
@@ -1796,7 +1789,8 @@ button.act-line:hover:not(:disabled) {
     max-width: 85%;
   }
   .bottom {
-    padding: 0 8px;
+    padding-left: 8px;
+    padding-right: 8px;
   }
   .welcome-title {
     font-size: 24px;
@@ -1810,9 +1804,6 @@ button.act-line:hover:not(:disabled) {
     left: 8px;
     right: 8px;
     width: auto;
-  }
-  .composer-hint {
-    font-size: 11px;
   }
 }
 
@@ -6862,20 +6853,23 @@ body.viewer-open {
   color: var(--text-2);
 }
 
-/* Новий чат на телефоні: поле вводу внизу, як і в розмові (і як у застосунках ChatGPT і Claude). Висота
-   застосунку = видима область (--app-h), тож клавіатура підхоплює поле, а після першого повідомлення
-   воно лишається на тому самому місці. */
+/* Новий чат на телефоні: поле посередині, під привітанням. Коли в нього пишуть, воно опускається вниз до
+   клавіатури, як у розмові: висота застосунку = видима область (--app-h), тож після першого повідомлення
+   поле лишається на тому самому місці. */
 @media (max-width: 768px) {
   .welcome {
-    justify-content: flex-end;
-    padding: 0 8px;
+    padding: 0 8px 12vh;
   }
-  .welcome-title {
+  .welcome:has(textarea:focus) {
+    justify-content: flex-end;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .kb-open .welcome:has(textarea:focus) {
+    padding-bottom: 8px;
+  }
+  .welcome:has(textarea:focus) .welcome-title {
     margin: auto 0;
     padding: 0 16px;
-  }
-  .welcome .composer-hint {
-    display: block;
   }
 }
 
