@@ -17,6 +17,8 @@ type Events = {
   'audio-play': string
   /** Відкрити файл (PDF, картинку, текст) у переглядачі поверх чату. */
   file: import('./viewer.ts').ViewFile
+  /** Прокрутити розмову до повідомлення (чи його вкладення) й підсвітити (з «Ресурсів чату»). */
+  reveal: { id: string; att?: string }
 }
 
 type Handler<K extends keyof Events> = (detail: Events[K]) => void

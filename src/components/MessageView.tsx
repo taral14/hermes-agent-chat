@@ -117,7 +117,7 @@ function UserMessage({ m }: { m: Message }) {
     )
   }
   return (
-    <div className="msg msg-user">
+    <div className="msg msg-user" id={`msg-${m.id}`}>
       <Attachments items={m.attachments} side="user" />
       {m.text && (
         <div className={`bubble ${m.text.startsWith('/') ? 'is-command' : ''}`}>
@@ -207,7 +207,7 @@ function AssistantMessage({ m }: { m: Message }) {
   const steps = activity.filter((p) => p.type !== 'notice' && p.type !== 'delivered')
   const showActivity = steps.length > 0 || (active && !answer)
   return (
-    <div className="msg msg-assistant">
+    <div className="msg msg-assistant" id={`msg-${m.id}`}>
       {notices.map((n, i) => (
         <div key={i} className="msg-notice">
           <Target size={15} />

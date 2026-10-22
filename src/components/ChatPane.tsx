@@ -1,9 +1,11 @@
 // Відкритий чат: шапка, розмова з прокруткою, панелі мети й задач, поле вводу.
-import { ArrowDown, Menu, PanelLeftOpen, Share, SquarePen } from 'lucide-react'
+import { ArrowDown, FolderOpen, Menu, PanelLeftOpen, Share, SquarePen } from 'lucide-react'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { on } from '../bus.ts'
 import type { Chat, Message } from '../shared.ts'
 import { GoalBar } from './GoalBar.tsx'
 import { JobBar } from './JobSheet.tsx'
+import { ResourcesSheet } from './ResourcesSheet.tsx'
 import { ActionsContext, type MessageActions, MessageView, TimeSeparator, needsTimeSeparator } from './MessageView.tsx'
 import { SelectionAsk } from './SelectionAsk.tsx'
 
@@ -62,6 +64,27 @@ export function ChatPane({ chat, list, loading, actions, composer, welcomeNote, 
     return () => ro.disconnect()
   }, [hasThread])
 
+  // «Показати в чаті» з ресурсів: прокрутити до повідомлення й на мить підсвітити його.
+  useEffect(
+    () =>
+      on('reveal', ({ id, att }) => {
+        const msg = document.getElementById(`msg-${id}`)
+        const el = (att && msg?.querySelector<HTMLElement>(`[data-att="${CSS.escape(att)}"]`)) || msg
+        if (!el) return
+        stick.current = false
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        el.classList.remove('is-flash')
+        void el.offsetWidth
+        el.classList.add('is-flash')
+        setTimeout(() => el.classList.remove('is-flash'), 1800)
+      }),
+    [],
+  )
+
+  const [resources, setResources] = useState(false)
+  // Дешева перевірка на кожен токен відповіді; повний розбір — лише коли шторку відкрито.
+  const hasResources = Boolean(list?.some((m) => m.attachments.length > 0 || m.text.includes('http')))
+
   const onScroll = () => {
     const el = scroller.current
     if (!el) return
@@ -98,6 +121,11 @@ export function ChatPane({ chat, list, loading, actions, composer, welcomeNote, 
         <span className="topbar-title">{chat?.title || 'Hermes'}</span>
       </div>
       <div className="topbar-right">
+        {chat && hasResources && (
+          <button type="button" className="icon-btn topbar-res" aria-label="Ресурси чату" title="Медіа, файли й посилання" onClick={() => setResources(true)}>
+            <FolderOpen size={19} />
+          </button>
+        )}
         {chat && (list?.length ?? 0) > 0 && (
           <button type="button" className="topbar-share" aria-label="Поділитися" title="Поділитися" onClick={onShare}>
             <Share size={18} />
@@ -152,6 +180,7 @@ export function ChatPane({ chat, list, loading, actions, composer, welcomeNote, 
         <GoalBar chat={chat} flash={flash} />
         {composer}
       </div>
+      {resources && <ResourcesSheet list={list} onClose={() => setResources(false)} />}
     </>
   )
 }

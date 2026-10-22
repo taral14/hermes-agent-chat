@@ -98,7 +98,7 @@ function PrivateFileCard({ a }: { a: Attachment }) {
     }
   }
   return (
-    <div className="att-file">
+    <div className="att-file" data-att={a.id || undefined}>
       <a href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-file-open" title={a.name} onClick={(e) => openInViewer(e, { url: uploadUrl(a.id), ...a })}>
         <span className="att-file-icon" style={{ background: kind.color }}>
           <kind.Icon size={19} />
@@ -134,13 +134,13 @@ export function Attachments({ items, side }: { items: Attachment[]; side: 'user'
         !a.id ? (
           <FileCard key={`${i}:${a.name}`} a={a} />
         ) : a.mime.startsWith('image/') ? (
-          <a key={a.id} href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-image" onClick={(e) => openInViewer(e, { url: uploadUrl(a.id), ...a })}>
+          <a key={a.id} data-att={a.id} href={uploadUrl(a.id)} target="_blank" rel="noreferrer" className="att-image" onClick={(e) => openInViewer(e, { url: uploadUrl(a.id), ...a })}>
             <img src={uploadUrl(a.id)} alt={a.name} loading="lazy" />
           </a>
         ) : a.mime.startsWith('audio/') ? (
           <AudioPlayer key={a.id} a={a} />
         ) : /^video\/(mp4|quicktime|webm)$/.test(a.mime) ? (
-          <div key={a.id} className="att-media att-video">
+          <div key={a.id} data-att={a.id} className="att-media att-video">
             <video controls playsInline preload="metadata" src={uploadUrl(a.id)} />
             <FileCard a={a} />
           </div>
