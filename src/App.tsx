@@ -338,6 +338,7 @@ export default function App() {
       onStop={stop}
       onSteer={steer}
       onBtw={btw}
+      onError={flash}
       commands={commands}
       modelSlot={<ModelPicker value={current ? current.model : newModel} options={models} onChange={setModel} narrow={narrow} />}
       mode={current?.mode ?? newMode}

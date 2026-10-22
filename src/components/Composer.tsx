@@ -1,7 +1,8 @@
-import { ArrowUp, Check, ChevronDown, FileText, Hand, ListChecks, Loader2, MessageCircleQuestion, MessageSquarePlus, Paperclip, Sparkles, Square, SquareSlash, X, Zap, type LucideIcon } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, FileText, Hand, ListChecks, Loader2, MessageCircleQuestion, MessageSquarePlus, Mic, Paperclip, Sparkles, Square, SquareSlash, X, Zap, type LucideIcon } from 'lucide-react'
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { type CommandInfo, api, uploadUrl } from '../api.ts'
 import { useAutosize } from '../hooks/useAutosize.ts'
+import { canRecord, useRecorder } from '../hooks/useRecorder.ts'
 import { getPrefs } from '../prefs.ts'
 import type { Attachment, ChatMode } from '../shared.ts'
 
@@ -19,6 +20,8 @@ type Props = {
   onSteer: (text: string) => Promise<boolean>
   /** Питання «до речі» під час роботи: окрема відповідь без переривання задачі. */
   onBtw?: (text: string) => Promise<boolean>
+  /** Показати помилку (мікрофон, розпізнавання). */
+  onError?: (e: unknown) => void
   draftKey: string
   /** Команди Hermes для меню «/» (лише в чатах на рідному протоколі). */
   commands?: CommandInfo[] | null
@@ -85,7 +88,7 @@ const drafts = new Map<string, string>()
 /** Підготувати текст у полі вводу чату (напр. «Обговорити з Hermes» з бази знань). */
 export const setDraft = (key: string, text: string) => drafts.set(key, text)
 
-export function Composer({ ref, running, answering, onSend, onStop, onSteer, onBtw, draftKey, commands, mode, onMode, modelSlot }: Props) {
+export function Composer({ ref, running, answering, onSend, onStop, onSteer, onBtw, onError, draftKey, commands, mode, onMode, modelSlot }: Props) {
   const [text, setText] = useState(() => drafts.get(draftKey) ?? '')
   const [files, setFiles] = useState<Pending[]>([])
   const [busy, setBusy] = useState(false)
@@ -115,6 +118,32 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
   useEffect(() => () => previews.current.forEach((u) => URL.revokeObjectURL(u)), [])
 
   useAutosize(area, text, 240)
+
+  // Голос: запис → текст від Hermes дописується в поле (не надсилається одразу, щоб можна було виправити).
+  const [transcribing, setTranscribing] = useState(false)
+  const recorder = useRecorder(
+    async (audio) => {
+      const key = keyRef.current
+      setTranscribing(true)
+      try {
+        const { text: heard } = await api.transcribe(audio)
+        if (!heard.trim()) throw new Error('Нічого не розпізнано: спробуй ще раз, ближче до мікрофона')
+        if (keyRef.current !== key) return
+        setText((prev) => {
+          const next = prev.trim() ? `${prev.replace(/\s+$/, '')} ${heard.trim()}` : heard.trim()
+          drafts.set(key, next)
+          return next
+        })
+      } catch (e) {
+        onError?.(e)
+      } finally {
+        setTranscribing(false)
+      }
+    },
+    (e) => onError?.(e),
+  )
+  // Перейшли в інший чат посеред запису: запис викидаємо.
+  useEffect(() => () => recorder.stop(false), [draftKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addFiles = (list: FileList | File[]) => {
     for (const file of Array.from(list)) {
@@ -262,7 +291,7 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
           ref={area}
           rows={1}
           value={text}
-          placeholder={answering ? 'Своя відповідь…' : running ? 'Уточнити задачу чи спитати до речі…' : commands ? 'Напиши Hermes або «/» для команд' : 'Напиши Hermes'}
+          placeholder={recorder.recording ? 'Слухаю…' : transcribing ? 'Розпізнаю…' : answering ? 'Своя відповідь…' : running ? 'Уточнити задачу чи спитати до речі…' : commands ? 'Напиши Hermes або «/» для команд' : 'Напиши Hermes'}
           onChange={(e) => {
             setText(e.target.value)
             drafts.set(draftKey, e.target.value)
@@ -321,8 +350,39 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
           />
           {mode && onMode && <ModePicker mode={mode} onMode={onMode} />}
           <div className="composer-spacer" />
-          {modelSlot}
-          {running && answering && text.trim() ? (
+          {recorder.recording ? (
+            <span className="rec-time" aria-live="polite">
+              <span className="rec-dot" />
+              {Math.floor(recorder.seconds / 60)}:{String(recorder.seconds % 60).padStart(2, '0')}
+            </span>
+          ) : (
+            modelSlot
+          )}
+          {recorder.recording ? (
+            <>
+              <button type="button" className="icon-btn round" title="Скасувати запис" aria-label="Скасувати запис" onClick={() => recorder.stop(false)}>
+                <X size={18} />
+              </button>
+              <button type="button" className="send-btn is-rec" title="Готово: розпізнати" aria-label="Зупинити запис і розпізнати" onClick={() => recorder.stop()}>
+                <Check size={18} strokeWidth={2.6} />
+              </button>
+            </>
+          ) : (
+            canRecord() &&
+            !(running && text.trim()) && (
+              <button
+                type="button"
+                className="icon-btn round mic-btn"
+                title="Надиктувати"
+                aria-label="Надиктувати"
+                disabled={transcribing}
+                onClick={() => void recorder.start()}
+              >
+                {transcribing ? <Loader2 size={18} className="spin" /> : <Mic size={18} />}
+              </button>
+            )
+          )}
+          {recorder.recording ? null : running && answering && text.trim() ? (
             <button type="button" className="send-btn" title="Відповісти" aria-label="Відповісти" disabled={!canSend} onClick={() => void submit()}>
               {busy ? <Loader2 size={18} className="spin" /> : <ArrowUp size={20} strokeWidth={2.4} />}
             </button>

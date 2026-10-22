@@ -10,6 +10,7 @@ import { gateway } from './gateway.ts'
 import { type Ctx, HttpError, PAGE_HEADERS, type Routes, sameOrigin, send } from './http.ts'
 import { activeRunCount, backfillMedia, setRunListeners, stopAll } from './live.ts'
 import { sweepUploads } from './media.ts'
+import { stopVoice, sweepSpeech } from './voice.ts'
 import { initNative, onCronChanged } from './native.ts'
 import { accountRoutes, loginRoutes } from './routes/auth.ts'
 import { chatRoutes } from './routes/chats.ts'
@@ -149,6 +150,8 @@ setInterval(syncJobLinks, 2 * 60_000).unref()
 backfillMedia()
 sweepUploads()
 setInterval(() => sweepUploads(), 6 * 3600_000).unref()
+void sweepSpeech()
+setInterval(() => void sweepSpeech(), 24 * 3600_000).unref()
 
 server.listen(PORT, BIND_HOST, () => {
   console.log(`chat: http://${BIND_HOST}:${PORT}${DEV ? ' (dev)' : ''} → ${PUBLIC_URL}`)
@@ -158,6 +161,7 @@ server.listen(PORT, BIND_HOST, () => {
 
 function shutdown() {
   stopAll()
+  stopVoice()
   gateway.stop()
   closeEvents()
   server.close()

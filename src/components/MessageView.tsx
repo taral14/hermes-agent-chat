@@ -1,6 +1,7 @@
 // Повідомлення в розмові: питання користувача й відповідь Hermes з ходом роботи, запитами й вкладеннями.
 import { AlertTriangle, GitBranch, Loader2, MessageCircleQuestion, Pencil, RotateCcw, Target } from 'lucide-react'
 import { createContext, memo, useContext, useRef, useState, type ReactNode } from 'react'
+import { isPublicView } from '../api.ts'
 import { useAutosize } from '../hooks/useAutosize.ts'
 import { usePrefs } from '../prefs.ts'
 import type { Message, Part } from '../shared.ts'
@@ -8,6 +9,7 @@ import { AnswerLinks, LinkPreviews, LinkText } from './Links.tsx'
 import { CopyButton, Markdown } from './Markdown.tsx'
 import { Activity } from './message/Activity.tsx'
 import { Attachments } from './message/Attachments.tsx'
+import { SpeakButton } from './message/Speak.tsx'
 import { DeliveredBadge, JobChips } from './message/JobChips.tsx'
 import { ApprovalCard, ClarifyCard } from './message/Prompts.tsx'
 import { ErrorBoundary, MessageFallback } from './ui/ErrorBoundary.tsx'
@@ -267,6 +269,7 @@ function AssistantMessage({ m }: { m: Message }) {
       {!active && (answer || m.attachments.length > 0 || m.error) && (
         <div className="msg-actions">
           {answer && <CopyButton text={answer} />}
+          {answer && !isPublicView() && <SpeakButton messageId={m.id} />}
           {actions?.enabled && m.turn && (
             <>
               <ActionButton label="Повторити" onClick={() => actions.retry(m)}>

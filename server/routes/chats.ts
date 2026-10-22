@@ -18,7 +18,7 @@ import {
   updateList,
 } from '../db.ts'
 import { emit, emitChat, publicChat } from '../events.ts'
-import { type Ctx, HttpError, readJson, send } from '../http.ts'
+import { type Ctx, HttpError, readBody, readJson, send } from '../http.ts'
 import { liveMessage } from '../live.ts'
 import { sweepUploads } from '../media.ts'
 import {
@@ -38,6 +38,8 @@ import {
   nativeStop,
 } from '../native.ts'
 import { setMuted } from '../push.ts'
+import { MAX_RECORDING, speech, transcribe } from '../voice.ts'
+import { serveFile } from './files.ts'
 import { newId } from '../util.ts'
 
 const isMode = (v: unknown): v is ChatMode => v === 'ask' || v === 'auto' || v === 'plan'
@@ -232,6 +234,20 @@ export async function chatRoutes({ req, res, path, method }: Ctx): Promise<boole
     // Лише керування автоматизаціями сесії, без довільних команд.
     if (!command || !/^\/(goal|loop|heartbeat)( (pause|resume|clear|stop|off|status))?$/.test(command.trim())) throw new HttpError(400, 'Невідома дія')
     return send(res, 200, { output: await native(() => nativeControl(chat, command.trim())) })
+  }
+
+  // Голос: запис із поля вводу → текст; відповідь Hermes → аудіо (див. voice.ts).
+  if (path === '/api/voice/transcribe' && method === 'POST') {
+    const audio = await readBody(req, MAX_RECORDING)
+    return send(res, 200, { text: await transcribe(audio, String(req.headers['content-type'] ?? '')) })
+  }
+  m = path.match(/^\/api\/messages\/([\w-]+)\/speech$/)
+  if (m && (method === 'GET' || method === 'HEAD')) {
+    const msg = liveMessage(m[1]!)
+    if (!msg || msg.role !== 'assistant') throw new HttpError(404, 'Повідомлення не знайдено')
+    if (['queued', 'running', 'stopping'].includes(msg.status)) throw new HttpError(409, 'Hermes ще відповідає')
+    const audio = await speech(msg.id, msg.text.replace(/^.*MEDIA:\S.*$/gm, '').trim())
+    return serveFile(req, res, { id: msg.id, name: 'Hermes.mp3', mime: audio.mime, size: 0, path: audio.path }, false)
   }
 
   // Керування ходом, що триває: зупинити, доповнити, відповісти на запит дозволу чи уточнення.

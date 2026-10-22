@@ -7144,3 +7144,42 @@ body.viewer-open {
 .btw-a > :last-child {
   margin-bottom: 0;
 }
+
+/* ---------- Голос ---------- */
+
+.mic-btn {
+  margin-right: 4px;
+}
+
+.rec-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: 4px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+
+.rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.send-btn.is-rec {
+  background: var(--danger);
+  color: #fff;
+}
+
+.msg-actions .icon-btn.is-speaking {
+  color: var(--unread);
+}

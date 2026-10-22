@@ -102,6 +102,8 @@ export const api = {
   createShare: (chatId: string) => req<{ share: ShareInfo }>('POST', `/api/chats/${chatId}/share`),
   deleteShare: (chatId: string) => req<{ share: null }>('DELETE', `/api/chats/${chatId}/share`),
   publicShare: (token: string) => req<SharedChat>('GET', `/api/public/share/${token}`),
+  /** Запис із мікрофона → текст (розпізнає Hermes). */
+  transcribe: (audio: Blob) => request<{ text: string }>('POST', '/api/voice/transcribe', { raw: audio, headers: { 'Content-Type': audio.type || 'audio/webm' } }),
   upload: (file: File) =>
     request<Attachment>('POST', '/api/uploads', {
       raw: file,

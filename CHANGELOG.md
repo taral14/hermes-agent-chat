@@ -30,6 +30,13 @@ First public release. Tested with Hermes Agent 0.22.
 - Choice questions: Hermes's `clarify` questions show as numbered option rows (recommended one marked, multi-select
   with checkboxes); typing in the message box answers the question with your own text. The `webchat` plugin asks
   Hermes to offer options this way instead of listing them in prose.
+- Chat resources: a header button opens the chat's media, files and links (page titles, YouTube thumbnails);
+  tapping one scrolls the conversation to it and highlights it.
+- Side questions: while Hermes works, «До речі» (or `/btw …`) asks a quick question that Hermes answers
+  separately (`prompt.btw`) without interrupting the task or adding to its history.
+- Voice: dictation from the message box (recorded in the browser, transcribed by Hermes' STT; the local
+  Whisper model stays loaded between recordings) and «Прочитати вголос» under answers (Hermes' TTS, with the
+  macOS system voice as a fallback when Hermes' TTS provider fails).
 
 ### Security
 - Server survives malformed URLs, a missing Hermes Python and unreadable files instead of crashing.
