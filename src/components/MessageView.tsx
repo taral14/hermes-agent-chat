@@ -1,5 +1,5 @@
 // Повідомлення в розмові: питання користувача й відповідь Hermes з ходом роботи, запитами й вкладеннями.
-import { AlertTriangle, GitBranch, Pencil, RotateCcw, Target, Loader2 } from 'lucide-react'
+import { AlertTriangle, GitBranch, Loader2, MessageCircleQuestion, Pencil, RotateCcw, Target } from 'lucide-react'
 import { createContext, memo, useContext, useRef, useState, type ReactNode } from 'react'
 import { useAutosize } from '../hooks/useAutosize.ts'
 import { usePrefs } from '../prefs.ts'
@@ -156,7 +156,8 @@ function UserMessage({ m }: { m: Message }) {
 
 function splitParts(m: Message): { activity: Part[]; answer: string } {
   const prompts = new Set(['approval', 'clarify'])
-  const parts = m.parts.filter((p) => !prompts.has(p.type) || (p as { state: string }).state !== 'pending')
+  // Картки «до речі» показуються окремо й не розривають текст відповіді.
+  const parts = m.parts.filter((p) => p.type !== 'btw' && (!prompts.has(p.type) || (p as { state: string }).state !== 'pending'))
   if (!ACTIVE.has(m.status)) return { activity: parts, answer: m.text }
   // Під час роботи текст після останньої дії — це відповідь, що стрімиться.
   let i = parts.length
@@ -193,6 +194,31 @@ export function TimeSeparator({ at }: { at: number }) {
   )
 }
 
+/** Питання «до речі» й окрема відповідь Hermes на нього. */
+function BtwCard({ p }: { p: Extract<Part, { type: 'btw' }> }) {
+  return (
+    <div className={`btw-card is-${p.state}`}>
+      <div className="btw-q">
+        <MessageCircleQuestion size={15} />
+        <span>
+          <b>До речі:</b> {p.question}
+        </span>
+      </div>
+      {p.state === 'pending' ? (
+        <div className="btw-wait">
+          <Loader2 size={14} className="spin" /> Hermes відповідає, задача триває…
+        </div>
+      ) : p.state === 'error' ? (
+        <div className="btw-error">Не вдалося відповісти{p.answer ? `: ${p.answer}` : ''}</div>
+      ) : (
+        <div className="btw-a">
+          <Markdown text={p.answer ?? ''} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AssistantMessage({ m }: { m: Message }) {
   const actions = useContext(ActionsContext)
   const { showMeta } = usePrefs()
@@ -205,6 +231,7 @@ function AssistantMessage({ m }: { m: Message }) {
   const notices = m.parts.filter((p): p is Extract<Part, { type: 'notice' }> => p.type === 'notice')
   const delivered = m.parts.find((p): p is Extract<Part, { type: 'delivered' }> => p.type === 'delivered')
   const steps = activity.filter((p) => p.type !== 'notice' && p.type !== 'delivered')
+  const asides = m.parts.filter((p): p is Extract<Part, { type: 'btw' }> => p.type === 'btw')
   const showActivity = steps.length > 0 || (active && !answer)
   return (
     <div className="msg msg-assistant" id={`msg-${m.id}`}>
@@ -219,6 +246,9 @@ function AssistantMessage({ m }: { m: Message }) {
       {pending.map((p) =>
         p.type === 'approval' ? <ApprovalCard key={p.promptId} m={m} p={p} /> : <ClarifyCard key={p.promptId} m={m} p={p} />,
       )}
+      {asides.map((p) => (
+        <BtwCard key={p.taskId} p={p} />
+      ))}
       {answer && (
         <div className={active ? 'answer is-streaming' : 'answer'}>
           <Markdown text={answer} />

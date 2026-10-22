@@ -255,7 +255,20 @@ export default function App() {
     try {
       // Hermes чекає відповіді на питання: текст із поля — це «свій варіант», а не доповнення задачі.
       if (asking) await answerClarify(runningMsg, asking, text)
+      else if (/^\/btw\s+\S/.test(text)) await api.btw(runningMsg.id, text.replace(/^\/btw\s+/, ''))
       else await api.steer(runningMsg.id, text)
+      return true
+    } catch (e) {
+      flash(e)
+      return false
+    }
+  }
+
+  /** Питання «до речі»: Hermes відповідає окремо, задача не переривається. */
+  const btw = async (text: string) => {
+    if (!runningMsg) return false
+    try {
+      await api.btw(runningMsg.id, text)
       return true
     } catch (e) {
       flash(e)
@@ -324,6 +337,7 @@ export default function App() {
       onSend={send}
       onStop={stop}
       onSteer={steer}
+      onBtw={btw}
       commands={commands}
       modelSlot={<ModelPicker value={current ? current.model : newModel} options={models} onChange={setModel} narrow={narrow} />}
       mode={current?.mode ?? newMode}

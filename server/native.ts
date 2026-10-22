@@ -36,6 +36,7 @@ import {
   lastPart,
   liveMessages,
   openLive,
+  publish,
 } from './live.ts'
 import { newId, str } from './util.ts'
 
@@ -422,6 +423,51 @@ export async function nativeSteer(messageId: string, text: string) {
   flush(l, true)
 }
 
+/** Відповіді «до речі», що прийшли раніше, ніж ми записали саме питання. */
+const btwEarly = new Map<string, string>()
+
+/** Питання «до речі»: Hermes відповідає зі знімка розмови окремим агентом, задача триває. */
+export async function nativeBtw(messageId: string, text: string) {
+  const { l, chat } = liveFor(messageId)
+  let taskId: string
+  try {
+    const r = await gateway.rpc<{ task_id?: string }>('prompt.btw', { session_id: chat.sessionId, text })
+    taskId = String(r.task_id ?? '')
+  } catch (err) {
+    throw wrap(err)
+  }
+  const part: Extract<Part, { type: 'btw' }> = { type: 'btw', taskId, question: text, state: 'pending' }
+  l.msg.parts.push(part)
+  const early = btwEarly.get(taskId)
+  if (early !== undefined) {
+    btwEarly.delete(taskId)
+    settleBtw(part, early)
+  }
+  flush(l, true)
+}
+
+function settleBtw(part: Extract<Part, { type: 'btw' }>, text: string) {
+  const failed = /^error:/i.test(text)
+  part.state = failed || !text.trim() ? 'error' : 'done'
+  part.answer = failed ? text.replace(/^error:\s*/i, '') : text.trim()
+}
+
+function btwDone(chat: ChatRow, p: Record<string, unknown>) {
+  const taskId = str(p.task_id)
+  if (!taskId) return
+  const text = str(p.text)
+  // Задача могла вже закінчитись: тоді повідомлення лише в базі.
+  const candidates = [...liveMessages().filter((l) => l.msg.chatId === chat.id).map((l) => l.msg), ...listMessages(chat.id).reverse()]
+  for (const m of candidates) {
+    const part = findPart(m.parts, 'btw', (b) => b.taskId === taskId)
+    if (!part) continue
+    settleBtw(part, text)
+    return publish(m)
+  }
+  btwEarly.set(taskId, text)
+  setTimeout(() => btwEarly.delete(taskId), 60_000)
+}
+
 export async function nativeAnswer(messageId: string, kind: 'approval' | 'clarify', promptId: string, generation: number, value: string) {
   const { l, chat } = liveFor(messageId)
   try {
@@ -624,7 +670,8 @@ function apply(l: Live, e: GatewayEvent) {
 
 function streamed(m: MessageRow) {
   const tail: string[] = []
-  for (let i = m.parts.length - 1; i >= 0 && m.parts[i]!.type === 'text'; i--) tail.unshift((m.parts[i] as { text: string }).text)
+  const parts = m.parts.filter((p) => p.type !== 'btw')
+  for (let i = parts.length - 1; i >= 0 && parts[i]!.type === 'text'; i--) tail.unshift((parts[i] as { text: string }).text)
   return tail.join('\n\n').trim()
 }
 
@@ -639,6 +686,7 @@ function onEvent(e: GatewayEvent) {
   if (!e.session_id) return
   const chat = getChatBySession(e.session_id)
   if (!chat) return
+  if (e.type === 'btw.complete') return btwDone(chat, (e.payload ?? {}) as Record<string, unknown>)
   if (e.type === 'session.control.update') {
     const control = ((e.payload ?? {}) as { control?: ChatControl }).control ?? null
     updateChat(chat.id, { control })

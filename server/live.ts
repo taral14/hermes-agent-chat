@@ -57,9 +57,18 @@ export function flush(l: Live, now = false) {
   }, 120)
 }
 
+/** Остання частина, якщо вона цього типу. Картки «до речі» не рахуються: вони не розривають потік тексту. */
 export function lastPart<T extends Part['type']>(parts: Part[], type: T): Extract<Part, { type: T }> | undefined {
-  const p = parts[parts.length - 1]
+  const p = parts.findLast((x) => x.type !== 'btw')
   return p?.type === type ? (p as Extract<Part, { type: T }>) : undefined
+}
+
+/** Зберегти й розіслати вже завершене повідомлення (напр. відповідь «до речі», що прийшла після кінця задачі). */
+export function publish(m: MessageRow) {
+  const l = live.get(m.id)
+  if (l) return flush(l, true)
+  saveMessage(m)
+  broadcast(m)
 }
 
 export function findPart<T extends Part['type']>(parts: Part[], type: T, match: (p: Extract<Part, { type: T }>) => boolean) {

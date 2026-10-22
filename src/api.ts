@@ -44,6 +44,7 @@ export const api = {
     req<{ chat: Chat; messages: Message[] }>('POST', '/api/messages', body),
   stop: (messageId: string) => req('POST', `/api/messages/${messageId}/stop`),
   steer: (messageId: string, text: string) => req('POST', `/api/messages/${messageId}/steer`, { text }),
+  btw: (messageId: string, text: string) => req('POST', `/api/messages/${messageId}/btw`, { text }),
   approval: (messageId: string, promptId: string, generation: number, value: string) =>
     req('POST', `/api/messages/${messageId}/approval`, { promptId, generation, value }),
   clarify: (messageId: string, promptId: string, generation: number, value: string) =>

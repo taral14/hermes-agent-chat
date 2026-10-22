@@ -7079,3 +7079,68 @@ body.viewer-open {
     box-shadow: 0 0 0 8px transparent;
   }
 }
+
+/* ---------- Питання «до речі» ---------- */
+
+.send-btn.is-aside {
+  width: auto;
+  gap: 6px;
+  padding: 0 12px 0 10px;
+  margin-right: 6px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.btw-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px 14px;
+  margin: 4px 0 10px;
+  font-size: 0.95em;
+}
+
+.btw-q {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--text-2);
+}
+
+.btw-q svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.btw-q b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.btw-wait,
+.btw-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.btw-error {
+  color: var(--danger, #d33);
+}
+
+.btw-a {
+  margin-top: 6px;
+}
+
+.btw-a > :first-child {
+  margin-top: 0;
+}
+
+.btw-a > :last-child {
+  margin-bottom: 0;
+}

@@ -1,4 +1,4 @@
-import { ArrowUp, Check, ChevronDown, FileText, Hand, ListChecks, Loader2, MessageSquarePlus, Paperclip, Sparkles, Square, SquareSlash, X, Zap, type LucideIcon } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, FileText, Hand, ListChecks, Loader2, MessageCircleQuestion, MessageSquarePlus, Paperclip, Sparkles, Square, SquareSlash, X, Zap, type LucideIcon } from 'lucide-react'
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { type CommandInfo, api, uploadUrl } from '../api.ts'
 import { useAutosize } from '../hooks/useAutosize.ts'
@@ -17,6 +17,8 @@ type Props = {
   onSend: (text: string, attachments: Attachment[]) => Promise<boolean>
   onStop: () => void
   onSteer: (text: string) => Promise<boolean>
+  /** Питання «до речі» під час роботи: окрема відповідь без переривання задачі. */
+  onBtw?: (text: string) => Promise<boolean>
   draftKey: string
   /** Команди Hermes для меню «/» (лише в чатах на рідному протоколі). */
   commands?: CommandInfo[] | null
@@ -83,7 +85,7 @@ const drafts = new Map<string, string>()
 /** Підготувати текст у полі вводу чату (напр. «Обговорити з Hermes» з бази знань). */
 export const setDraft = (key: string, text: string) => drafts.set(key, text)
 
-export function Composer({ ref, running, answering, onSend, onStop, onSteer, draftKey, commands, mode, onMode, modelSlot }: Props) {
+export function Composer({ ref, running, answering, onSend, onStop, onSteer, onBtw, draftKey, commands, mode, onMode, modelSlot }: Props) {
   const [text, setText] = useState(() => drafts.get(draftKey) ?? '')
   const [files, setFiles] = useState<Pending[]>([])
   const [busy, setBusy] = useState(false)
@@ -182,12 +184,12 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, dra
   const ready = files.filter((f) => f.att).map((f) => f.att!)
   const canSend = !busy && !uploading && (text.trim().length > 0 || (!running && ready.length > 0))
 
-  const submit = async () => {
+  const submit = async (aside = false) => {
     if (!canSend) return
     const key = draftKey
     const steering = running
     setBusy(true)
-    const ok = steering ? await onSteer(text.trim()) : await onSend(text.trim(), ready)
+    const ok = steering ? await (aside && onBtw ? onBtw(text.trim()) : onSteer(text.trim())) : await onSend(text.trim(), ready)
     setBusy(false)
     if (!ok) return
     drafts.delete(key)
@@ -260,7 +262,7 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, dra
           ref={area}
           rows={1}
           value={text}
-          placeholder={answering ? 'Своя відповідь…' : running ? 'Додати до поточної задачі…' : commands ? 'Напиши Hermes або «/» для команд' : 'Напиши Hermes'}
+          placeholder={answering ? 'Своя відповідь…' : running ? 'Уточнити задачу чи спитати до речі…' : commands ? 'Напиши Hermes або «/» для команд' : 'Напиши Hermes'}
           onChange={(e) => {
             setText(e.target.value)
             drafts.set(draftKey, e.target.value)
@@ -325,9 +327,17 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, dra
               {busy ? <Loader2 size={18} className="spin" /> : <ArrowUp size={20} strokeWidth={2.4} />}
             </button>
           ) : running && text.trim() ? (
-            <button type="button" className="send-btn" title="Додати до поточної задачі" aria-label="Додати до задачі" disabled={!canSend} onClick={() => void submit()}>
-              <MessageSquarePlus size={18} />
-            </button>
+            <>
+              {onBtw && (
+                <button type="button" className="send-btn is-aside" title="Спитати до речі: окрема відповідь, задача не переривається" aria-label="Спитати до речі" disabled={!canSend} onClick={() => void submit(true)}>
+                  <MessageCircleQuestion size={17} />
+                  <span>До речі</span>
+                </button>
+              )}
+              <button type="button" className="send-btn" title="Додати до поточної задачі" aria-label="Додати до задачі" disabled={!canSend} onClick={() => void submit()}>
+                {busy ? <Loader2 size={18} className="spin" /> : <MessageSquarePlus size={18} />}
+              </button>
+            </>
           ) : running ? (
             <button type="button" className="send-btn" title="Зупинити" aria-label="Зупинити" onClick={onStop}>
               <Square size={14} fill="currentColor" />

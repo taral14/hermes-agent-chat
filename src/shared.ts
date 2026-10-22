@@ -48,6 +48,8 @@ export type Part =
     }
   | { type: 'subagent'; id: string; goal: string; status: 'running' | 'done' | 'error'; summary?: string; duration?: number }
   | { type: 'steer'; text: string }
+  /** Питання «до речі» (/btw) під час роботи: Hermes відповідає окремо, не перериваючи задачу й не пишучи в історію. */
+  | { type: 'btw'; taskId: string; question: string; state: 'pending' | 'done' | 'error'; answer?: string }
   /** Результат слеш-команди (/status, /usage тощо) або службова примітка Hermes. */
   | { type: 'notice'; text: string }
   /** Hermes надіслав це повідомлення сам: результат задачі за розкладом або send_message. */

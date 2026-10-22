@@ -27,6 +27,7 @@ import {
   forgetChat,
   nativeAnswer,
   nativeBranch,
+  nativeBtw,
   nativeCommand,
   nativeControl,
   nativeDelete,
@@ -234,7 +235,7 @@ export async function chatRoutes({ req, res, path, method }: Ctx): Promise<boole
   }
 
   // Керування ходом, що триває: зупинити, доповнити, відповісти на запит дозволу чи уточнення.
-  m = path.match(/^\/api\/messages\/([\w-]+)\/(stop|steer|approval|clarify)$/)
+  m = path.match(/^\/api\/messages\/([\w-]+)\/(stop|steer|btw|approval|clarify)$/)
   if (m && method === 'POST') {
     const id = m[1]!
     const action = m[2]!
@@ -242,10 +243,10 @@ export async function chatRoutes({ req, res, path, method }: Ctx): Promise<boole
     if (!msg) throw new HttpError(404, 'Повідомлення не знайдено')
     if (getChat(msg.chatId)?.engine !== 'native') throw new HttpError(410, LEGACY)
     if (action === 'stop') await native(() => nativeStop(id))
-    else if (action === 'steer') {
+    else if (action === 'steer' || action === 'btw') {
       const { text } = await readJson<{ text?: string }>(req)
       if (!text?.trim()) throw new HttpError(400, 'Порожній текст')
-      await native(() => nativeSteer(id, text.trim()))
+      await native(() => (action === 'btw' ? nativeBtw(id, text.trim()) : nativeSteer(id, text.trim())))
     } else {
       const b = await readJson<{ promptId?: string; generation?: number; value?: string }>(req)
       if (!b.promptId || typeof b.value !== 'string') throw new HttpError(400, 'Немає відповіді')
