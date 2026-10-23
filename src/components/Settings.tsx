@@ -296,11 +296,6 @@ function Hermes({ info, models, onJobs }: { info: SettingsInfo | null; models: M
       <Group foot="Задачі зазвичай живуть у своїх чатах. Тут — усі разом, зокрема ті, що пишуть у Telegram, і службові скрипти.">
         <NavRow Icon={CalendarClock} title="Усі задачі за розкладом" onClick={onJobs} />
       </Group>
-      {info?.about.panelUrl && (
-        <Group foot="Сесії, навички, пам’ять і повні налаштування Hermes.">
-          <NavRow Icon={ExternalLink} title="Панель Hermes" hint={info.about.panelUrl.replace(/^https?:\/\//, '')} href={info.about.panelUrl} />
-        </Group>
-      )}
     </>
   )
 }

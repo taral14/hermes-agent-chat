@@ -196,7 +196,7 @@ export type ChatPrefs = {
 
 export type SettingsInfo = {
   prefs: ChatPrefs
-  about: { version: string; startedAt: number; hermes: boolean; vault: boolean; panelUrl: string }
+  about: { version: string; startedAt: number; hermes: boolean; vault: boolean }
 }
 
 export type StorageInfo = { files: number; bytes: number; macFiles: number; linkCache: number; dbBytes: number }

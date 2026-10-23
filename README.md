@@ -179,7 +179,6 @@ tasks can shift by an hour after a daylight-saving change. Set it, e.g. `timezon
 | `HERMES_HOME` | `~/.hermes` | Hermes directory: `.env`, `config.yaml`, cache |
 | `HERMES_AGENT_DIR`, `HERMES_PYTHON` | from `HERMES_HOME` | Hermes code and its Python, for the gateway bridge |
 | `HERMES_URL` | `http://127.0.0.1:8642` | Hermes API server |
-| `HERMES_PANEL_URL` | — | Link to the Hermes dashboard in Settings |
 | `DATA_DIR` | `./data` | Database, files, keys |
 | `CHAT_CONFIG` | `./config.yaml` | Username and password file |
 | `VAULT_PATH` | from Hermes `.env` | Obsidian vault |

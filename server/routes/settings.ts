@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SettingsInfo, StorageInfo } from '../../src/shared.ts'
-import { HERMES_PANEL_URL, ROOT } from '../config.ts'
+import { ROOT } from '../config.ts'
 import { DATA_DIR, clearLinkPreviews, countLinkPreviews, listChats, listMessages, listUploads } from '../db.ts'
 import { gateway } from '../gateway.ts'
 import { modelOptions } from '../hermes.ts'
@@ -108,7 +108,7 @@ export async function settingsRoutes({ req, res, url, path, method }: Ctx): Prom
   if (path === '/api/settings' && method === 'GET') {
     const info: SettingsInfo = {
       prefs: chatPrefs(),
-      about: { version: VERSION, startedAt: STARTED_AT, hermes: await gateway.check(), vault: (await vaultInfo()).available, panelUrl: HERMES_PANEL_URL },
+      about: { version: VERSION, startedAt: STARTED_AT, hermes: await gateway.check(), vault: (await vaultInfo()).available },
     }
     return send(res, 200, info)
   }

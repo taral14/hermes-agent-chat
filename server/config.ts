@@ -25,8 +25,6 @@ export const HERMES_AGENT_DIR = expand(env('HERMES_AGENT_DIR') ?? env('HERMES_HO
 export const HERMES_PYTHON = expand(env('HERMES_PYTHON') ?? join(HERMES_AGENT_DIR, 'venv', 'bin', 'python'))
 /** API-сервер Hermes (Runs API, задачі за розкладом). */
 export const HERMES_URL = (env('HERMES_URL') ?? 'http://127.0.0.1:8642').replace(/\/+$/, '')
-/** Панель Hermes, якщо вона відкрита назовні: посилання в налаштуваннях. Порожньо — посилання не показуємо. */
-export const HERMES_PANEL_URL = env('HERMES_PANEL_URL') ?? ''
 
 /**
  * Необов’язковий роутер, що запускає чат на вимогу й зупиняє після простою.
