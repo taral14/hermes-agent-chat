@@ -2,13 +2,14 @@
 # Лише macOS. Встановлює launchd-агента, який дзеркалить Obsidian-сховище Hermes (iCloud Drive) у data/vault.
 # Потрібен, бо процес чату, запущений як служба, macOS не пускає в iCloud Drive. Агент стартує через
 # osascript, як gateway Hermes: так macOS пускає його туди.
-# Налаштування беруться з .env чату (HERMES_HOME, DATA_DIR). Повторний запуск оновлює агента.
+# Сховище — VAULT_PATH з .env чату (DATA_DIR — куди класти копію). Повторний запуск оновлює агента.
 # Видалити:
 #   launchctl bootout gui/$(id -u)/com.hermes-chat.vault-mirror
 #   rm ~/Library/LaunchAgents/com.hermes-chat.vault-mirror.plist
 set -eu
 DIR=$(cd "$(dirname "$0")/.." && pwd)
 if [ -f "$DIR/.env" ]; then set -a; . "$DIR/.env"; set +a; fi
+[ -n "${VAULT_PATH:-}" ] || { echo "Задай VAULT_PATH у .env чату: шлях до сховища Obsidian."; exit 1; }
 LABEL=com.hermes-chat.vault-mirror
 NODE=${NODE:-$(command -v node)}
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"

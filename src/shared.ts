@@ -196,7 +196,7 @@ export type ChatPrefs = {
 
 export type SettingsInfo = {
   prefs: ChatPrefs
-  about: { version: string; hermes: boolean; vault: boolean }
+  about: { version: string; hermes: boolean; /** null — базу знань не налаштовано (немає VAULT_PATH). */ vault: boolean | null }
 }
 
 export type StorageInfo = { files: number; bytes: number; macFiles: number; linkCache: number; dbBytes: number }

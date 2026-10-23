@@ -72,8 +72,7 @@ It never overwrites an existing `config.yaml` or `.env`.
 
 ### 4. Configure `.env` (only if needed)
 
-The defaults work on this computer: the chat finds your folder (`~/.hermes`), your Python and your vault
-by itself. Edit `.env` in the chat folder only for these cases:
+The defaults work on this computer: the chat finds your folder (`~/.hermes`) and your Python by itself. Edit `.env` in the chat folder only for these cases:
 
 - **Phone access**: set `PUBLIC_HOST=<domain>` (without `https://`). Passkeys, share links and push notifications
   are bound to this domain.
@@ -153,10 +152,12 @@ restart in step 9.
 ### 8. Optional extras
 
 - **Time zone.** If `hermes config get timezone` is empty, propose setting it to this computer's zone
-  (`node -p 'Intl.DateTimeFormat().resolvedOptions().timeZone'`), e.g. `hermes config set timezone Europe/Kyiv`. Without it the first scheduled run after a daylight-saving change can
-  be an hour off.
-- **Obsidian knowledge base.** The chat shows the vault from `OBSIDIAN_VAULT_PATH` in your `.env` (the same one
-  your `obsidian` skill uses), or `VAULT_PATH` in the chat's `.env`. Nothing to do if it is set.
+  (`node -p 'Intl.DateTimeFormat().resolvedOptions().timeZone'`), e.g. `hermes config set timezone Europe/Kyiv`.
+  Without it the first scheduled run after a daylight-saving change can be an hour off.
+- **Obsidian knowledge base.** The chat's "Knowledge base" section is off unless `VAULT_PATH` is set in the chat's
+  `.env`. Ask the user whether they keep notes in an Obsidian vault and which folder it is. If you already write
+  notes to a vault (for example `OBSIDIAN_VAULT_PATH` in your `.env`), suggest that folder. Then set
+  `VAULT_PATH=<absolute path>` in the chat's `.env` and restart the chat. If they don't use Obsidian, skip this.
   On macOS, when the vault is in iCloud Drive (`~/Library/Mobile Documents/…`) and the chat runs as a service,
   the service cannot read it: run `npm run setup:vault-mirror` (it keeps a copy in `data/vault/`).
 - **Phone access.** The server listens on `127.0.0.1` only; it needs HTTPS in front of it. If the user has

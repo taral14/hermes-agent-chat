@@ -31,7 +31,7 @@ export type PluginChange = { reload: 'now' | 'after-run' }
 const req = <T>(method: string, path: string, body?: unknown) => request<T>(method, path, { body })
 
 export const api = {
-  me: () => req<{ username: string }>('GET', '/api/me'),
+  me: () => req<{ username: string; kb: boolean }>('GET', '/api/me'),
   login: (username: string, password: string) => req('POST', '/api/login', { username, password }),
   logout: () => req('POST', '/api/logout'),
   chats: () => req<Chat[]>('GET', '/api/chats'),

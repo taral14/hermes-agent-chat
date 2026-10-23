@@ -2,36 +2,29 @@
 // рахуємо зворотні посилання і стежимо за змінами, щоб показувати нове наживо.
 import { readFileSync, statSync, watch } from 'node:fs'
 import { readFile, readdir, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { DATA_DIR } from './db.ts'
-import { IS_MAC, hermesPath } from './config.ts'
+import { VAULT_PATH } from './config.ts'
 
 /**
- * Шлях до сховища: VAULT_PATH; інакше дзеркало від служби vault-mirror (data/vault/<назва>), бо в сам
- * iCloud Drive процес, запущений роутером, macOS не пускає; інакше OBSIDIAN_VAULT_PATH із налаштувань Hermes.
+ * Сховище — VAULT_PATH із .env чату; не задано — бази знань немає. На macOS у iCloud Drive службу чату
+ * не пускають, тому, якщо служба vault-mirror дзеркалить саме це сховище, читаємо її копію (data/vault/<назва>).
  */
 function vaultPath(): string {
-  if (process.env.VAULT_PATH) return process.env.VAULT_PATH
+  if (!VAULT_PATH) return ''
   try {
     const mirror = JSON.parse(readFileSync(join(DATA_DIR, 'vault', '.mirror.json'), 'utf8')) as { source?: string }
-    if (mirror.source) return join(DATA_DIR, 'vault', basename(mirror.source))
+    if (mirror.source && resolve(mirror.source) === VAULT_PATH) return join(DATA_DIR, 'vault', basename(VAULT_PATH))
   } catch {
     /* служба дзеркала не встановлена */
   }
-  try {
-    const env = readFileSync(hermesPath('.env'), 'utf8')
-    const m = env.match(/^OBSIDIAN_VAULT_PATH=["']?([^"'\n]+)/m)
-    if (m) return m[1]!.replace(/^~/, homedir())
-  } catch {
-    /* немає .env */
-  }
-  // Типове місце сховища Obsidian в iCloud (лише macOS). Інакше бази знань просто немає.
-  return IS_MAC ? join(homedir(), 'Library', 'Mobile Documents', 'iCloud~md~obsidian', 'Documents', 'Hermes Vault') : join(DATA_DIR, 'vault', 'none')
+  return VAULT_PATH
 }
 
-export const VAULT = resolve(vaultPath())
+const VAULT = vaultPath()
+/** Чи увімкнена база знань (задано VAULT_PATH). */
+export const VAULT_ENABLED = VAULT !== ''
 const SKIP = new Set(['.obsidian', '.trash', '.git', 'node_modules'])
 const ASSET_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.pdf', '.mp3', '.m4a', '.wav', '.mp4', '.txt', '.json', '.csv', '.tsv', '.xml'])
 
@@ -107,6 +100,7 @@ let readable = false
  * а лише база знань лишається порожньою. Перечитуються тільки змінені файли.
  */
 function scan(): Promise<void> {
+  if (!VAULT_ENABLED) return Promise.resolve()
   if (scanning) return scanning
   scanning = (async () => {
     const seen = new Set<string>()
@@ -274,6 +268,7 @@ export async function graph() {
 
 /** Безпечний повний шлях до файлу сховища (вкладення для ![[...]]). */
 export function vaultFile(rel: string): string | null {
+  if (!VAULT_ENABLED) return null
   const full = resolve(VAULT, rel)
   if (!full.startsWith(VAULT + sep) || !statSync(full, { throwIfNoEntry: false })?.isFile()) return null
   if (rel.split('/').some((seg) => SKIP.has(seg))) return null
@@ -282,6 +277,7 @@ export function vaultFile(rel: string): string | null {
 
 /** Стежимо за сховищем: Hermes щось записав — оновлюємо індекс і кажемо вкладкам. */
 export async function watchVault(onChange: (paths: string[]) => void) {
+  if (!VAULT_ENABLED) return
   await scan()
   if (!readable) {
     console.warn(`[vault] сховище недоступне або порожнє: ${VAULT}. Повторю за хвилину.`)

@@ -129,9 +129,9 @@ Hermes сканує `~/.hermes/plugins/`: тека там із `plugin.json` з'
 
 ### База знань Obsidian (необов'язково)
 
-Чат показує сховище з `OBSIDIAN_VAULT_PATH` у `.env` Hermes (або `VAULT_PATH` у `.env` чату). На macOS служба
-не має доступу до iCloud Drive, тож для сховища в iCloud постав дзеркало: `npm run setup:vault-mirror`
-(копія в `data/vault/`).
+Задай `VAULT_PATH` у `.env` чату: тека сховища Obsidian, зазвичай та, куди Hermes пише нотатки. Без неї розділу
+«База знань» у чаті немає. На macOS служба не має доступу до iCloud Drive, тож для сховища в iCloud постав
+дзеркало: `npm run setup:vault-mirror` (копія в `data/vault/`).
 
 ### Часовий пояс розкладу
 

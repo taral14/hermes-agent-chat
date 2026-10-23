@@ -1,7 +1,7 @@
 // Перевірка налаштування: npm run doctor. Нічого не змінює, лише каже, що готово, а що ні й як виправити.
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import {
   CONFIG_FILE,
@@ -15,6 +15,7 @@ import {
   PUBLIC_URL,
   ROOT,
   ROUTER_URL,
+  VAULT_PATH,
   hermesPath,
 } from '../server/config.ts'
 
@@ -129,19 +130,19 @@ else {
 }
 
 section('База знань (Obsidian, необов’язково)')
-let vault = process.env.VAULT_PATH ?? ''
-if (!vault) {
-  try {
-    vault = /^OBSIDIAN_VAULT_PATH=["']?([^"'\n]+)/m.exec(readFileSync(hermesPath('.env'), 'utf8'))?.[1] ?? ''
-  } catch {
-    /* немає */
-  }
-}
-if (!vault) warn('сховище Obsidian не задано — розділ «База знань» буде порожній', 'OBSIDIAN_VAULT_PATH у .env Hermes або VAULT_PATH у .env чату')
+if (!VAULT_PATH) console.log('    вимкнена: щоб увімкнути, задай VAULT_PATH у .env чату (шлях до сховища Obsidian)')
 else {
-  console.log(`    сховище: ${vault}`)
-  if (existsSync(join(DATA_DIR, 'vault', '.mirror.json'))) ok('копія сховища для чату оновлюється (дзеркало)')
-  else if (IS_MAC && vault.includes('Mobile Documents')) warn('сховище в iCloud: служба чату туди не має доступу', 'npm run setup:vault-mirror (копія для чату)')
+  console.log(`    сховище: ${VAULT_PATH}`)
+  let mirror = ''
+  try {
+    mirror = String((JSON.parse(readFileSync(join(DATA_DIR, 'vault', '.mirror.json'), 'utf8')) as { source?: unknown }).source ?? '')
+  } catch {
+    /* дзеркала немає */
+  }
+  if (mirror && resolve(mirror) === VAULT_PATH) ok('копія сховища для чату оновлюється (дзеркало)')
+  else if (IS_MAC && VAULT_PATH.includes('/Library/Mobile Documents/')) warn('сховище в iCloud: служба чату туди не має доступу', 'npm run setup:vault-mirror (копія для чату)')
+  else if (existsSync(VAULT_PATH)) ok('тека сховища є')
+  else fail('теки сховища немає', 'перевір VAULT_PATH у .env чату')
 }
 
 console.log(problems ? `\nПроблем: ${problems}. Виправ позначене ✗ і запусти ще раз.` : '\nУсе готово. Запуск: npm start')

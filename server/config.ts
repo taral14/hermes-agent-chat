@@ -25,6 +25,8 @@ export const HERMES_AGENT_DIR = expand(env('HERMES_AGENT_DIR') ?? env('HERMES_HO
 export const HERMES_PYTHON = expand(env('HERMES_PYTHON') ?? join(HERMES_AGENT_DIR, 'venv', 'bin', 'python'))
 /** API-сервер Hermes (Runs API, задачі за розкладом). */
 export const HERMES_URL = (env('HERMES_URL') ?? 'http://127.0.0.1:8642').replace(/\/+$/, '')
+/** Сховище Obsidian для бази знань. Не задано — бази знань у чаті немає. */
+export const VAULT_PATH = env('VAULT_PATH') ? resolve(expand(env('VAULT_PATH')!)) : ''
 
 /**
  * Необов’язковий роутер, що запускає чат на вимогу й зупиняє після простою.

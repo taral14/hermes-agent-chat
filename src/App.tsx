@@ -38,6 +38,8 @@ const goKb = (r: KbRoute) => navigateTo(kbUrl(r))
 export default function App() {
   const [auth, setAuth] = useState<'unknown' | 'out' | 'in'>('unknown')
   const [username, setUsername] = useState('')
+  /** База знань увімкнена на сервері (VAULT_PATH); null — ще не знаємо. */
+  const [kbEnabled, setKbEnabled] = useState<boolean | null>(null)
   const route = useRoute()
   const currentId = route.kind === 'chat' ? route.id : null
   const routeRef = useRef(route)
@@ -111,6 +113,7 @@ export default function App() {
   const onLoggedIn = useCallback(() => {
     api.me().then((r) => {
       setUsername(r.username)
+      setKbEnabled(r.kb)
       setAuth('in')
     })
   }, [])
@@ -118,7 +121,7 @@ export default function App() {
   useEffect(() => {
     api
       .me()
-      .then((r) => (setUsername(r.username), setAuth('in')))
+      .then((r) => (setUsername(r.username), setKbEnabled(r.kb), setAuth('in')))
       .catch(() => setAuth('out'))
     return on('unauthorized', () => setAuth('out'))
   }, [])
@@ -140,6 +143,11 @@ export default function App() {
   useEffect(() => {
     if (auth === 'in' && currentId) void loadChat(currentId)
   }, [auth, currentId, loadChat])
+
+  // Базу знань вимкнено на сервері, а адреса веде в неї (стара закладка): на головну.
+  useEffect(() => {
+    if (kbEnabled === false && route.kind === 'kb') navigateTo('/', true)
+  }, [kbEnabled, route.kind])
 
   // ---------- Події з відповідей і сповіщень ----------
 
@@ -385,7 +393,7 @@ export default function App() {
               navigate(id)
             }}
             onNew={() => newChat()}
-            onKb={() => goKb({ kind: 'home' })}
+            onKb={kbEnabled ? () => goKb({ kind: 'home' }) : undefined}
             kbActive={route.kind === 'kb'}
             onPlugins={() => navigateTo(pluginsUrl())}
             pluginsActive={route.kind === 'plugins'}

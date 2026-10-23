@@ -13,7 +13,7 @@ import { chatPrefs, updateChatPrefs } from '../prefs.ts'
 import { setPresence } from '../push.ts'
 import { translate } from '../translate.ts'
 import { unfurl } from '../unfurl.ts'
-import { vaultInfo } from '../vault.ts'
+import { VAULT_ENABLED, vaultInfo } from '../vault.ts'
 
 /** Версія для «Про застосунок»: з package.json, а в git-копії ще й коміт. */
 export const VERSION = (() => {
@@ -106,7 +106,7 @@ export async function settingsRoutes({ req, res, url, path, method }: Ctx): Prom
   if (path === '/api/settings' && method === 'GET') {
     const info: SettingsInfo = {
       prefs: chatPrefs(),
-      about: { version: VERSION, hermes: await gateway.check(), vault: (await vaultInfo()).available },
+      about: { version: VERSION, hermes: await gateway.check(), vault: VAULT_ENABLED ? (await vaultInfo()).available : null },
     }
     return send(res, 200, info)
   }

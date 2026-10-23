@@ -165,9 +165,9 @@ Check a folder with `hermes plugins validate ~/.hermes/plugins/my-server`.
 
 ### Obsidian knowledge base (optional)
 
-The chat shows the vault from `OBSIDIAN_VAULT_PATH` in Hermes' `.env` (or `VAULT_PATH` in the chat's `.env`).
-On macOS a background service cannot read iCloud Drive; for a vault in iCloud run `npm run setup:vault-mirror`,
-which keeps a copy in `data/vault/`.
+Set `VAULT_PATH` in the chat's `.env` to your Obsidian vault folder, usually the one Hermes writes notes to.
+Without it the chat has no knowledge base section. On macOS a background service cannot read iCloud Drive;
+for a vault in iCloud run `npm run setup:vault-mirror`, which keeps a copy in `data/vault/`.
 
 ### Time zone for scheduled tasks
 
@@ -187,7 +187,7 @@ the first run after a daylight-saving change can be an hour off. Set it, e.g. `t
 | `HERMES_URL` | `http://127.0.0.1:8642` | Hermes API server |
 | `DATA_DIR` | `./data` | Database, files, keys |
 | `CHAT_CONFIG` | `./config.yaml` | Username and password file |
-| `VAULT_PATH` | from Hermes `.env` | Obsidian vault |
+| `VAULT_PATH` | — | Obsidian vault for the knowledge base; unset — no knowledge base |
 | `VAPID_SUBJECT` | the chat's URL | Contact for push services |
 | `ROUTER_URL` | — | Only if a process manager stops the chat when idle (see `.env.example`) |
 

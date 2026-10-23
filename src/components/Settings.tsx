@@ -283,15 +283,17 @@ function Hermes({ info, models, onJobs }: { info: SettingsInfo | null; models: M
           </span>
           <span className="set-value">{models ? `${prettyModel(models.current.model)} · ${models.current.provider}` : '…'}</span>
         </div>
-        <div className="set-row">
-          <span className="set-row-text">
-            <span className="set-row-title">База знань</span>
-          </span>
-          <span className="set-value">
-            {dot(info?.about.vault)}
-            {!info ? '…' : info.about.vault ? 'Підключена' : 'Недоступна'}
-          </span>
-        </div>
+        {info?.about.vault != null && (
+          <div className="set-row">
+            <span className="set-row-text">
+              <span className="set-row-title">База знань</span>
+            </span>
+            <span className="set-value">
+              {dot(info.about.vault)}
+              {info.about.vault ? 'Підключена' : 'Недоступна'}
+            </span>
+          </div>
+        )}
       </Group>
       <Group foot="Задачі зазвичай живуть у своїх чатах. Тут — усі разом, зокрема ті, що пишуть в інші канали Hermes, і службові скрипти.">
         <NavRow Icon={CalendarClock} title="Усі задачі за розкладом" onClick={onJobs} />

@@ -44,7 +44,8 @@ type Props = {
   onNewInList: (listId: string) => void
   onClose: () => void
   onSettings: () => void
-  onKb: () => void
+  /** Немає — базу знань не налаштовано, пункту в меню немає. */
+  onKb?: () => void
   kbActive: boolean
   onPlugins: () => void
   pluginsActive: boolean
@@ -510,12 +511,14 @@ export function Sidebar(p: Props) {
       <div className="chat-list">
         {!searching && (
           <div className="nav-block">
-            <button type="button" className={`nav-row ${p.kbActive ? 'is-active' : ''}`} onClick={p.onKb}>
-              <span className="nav-icon">
-                <BookOpen size={p.narrow ? 24 : 18} />
-              </span>
-              <span>База знань</span>
-            </button>
+            {p.onKb && (
+              <button type="button" className={`nav-row ${p.kbActive ? 'is-active' : ''}`} onClick={p.onKb}>
+                <span className="nav-icon">
+                  <BookOpen size={p.narrow ? 24 : 18} />
+                </span>
+                <span>База знань</span>
+              </button>
+            )}
             <button type="button" className={`nav-row ${p.pluginsActive ? 'is-active' : ''}`} onClick={p.onPlugins}>
               <span className="nav-icon">
                 <Blocks size={p.narrow ? 24 : 18} />

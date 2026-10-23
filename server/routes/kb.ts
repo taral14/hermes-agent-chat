@@ -2,10 +2,11 @@
 import { createReadStream } from 'node:fs'
 import { type Ctx, HttpError, SANDBOX_CSP, send, stream } from '../http.ts'
 import { mimeOf } from '../media.ts'
-import { getNote, graph, listNotes, resolveLink, searchNotes, vaultFile, vaultInfo } from '../vault.ts'
+import { VAULT_ENABLED, getNote, graph, listNotes, resolveLink, searchNotes, vaultFile, vaultInfo } from '../vault.ts'
 
 export async function kbRoutes({ res, url, path }: Ctx): Promise<boolean> {
   if (path !== '/api/kb' && !path.startsWith('/api/kb/')) return false
+  if (!VAULT_ENABLED) throw new HttpError(404, 'Базу знань не налаштовано: VAULT_PATH у .env чату')
   const q = (k: string) => url.searchParams.get(k) ?? ''
   if (path === '/api/kb') return send(res, 200, { ...(await vaultInfo()), list: await listNotes() })
   if (path === '/api/kb/note') {

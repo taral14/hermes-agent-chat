@@ -3,6 +3,7 @@ import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simp
 import { type PasskeyRow, deleteLoginSession, deleteOtherLoginSessions, deletePasskey, listLoginSessions, listPasskeys, renamePasskey, setSetting } from '../db.ts'
 import { type Ctx, HttpError, readJson, send } from '../http.ts'
 import { PasskeyError, loginOptions, loginVerify, passwordLoginAllowed, registerVerify, registrationOptions } from '../passkeys.ts'
+import { VAULT_ENABLED } from '../vault.ts'
 import { LOGOUT_COOKIE, checkAttempts, loadConfig, loginCookie, recordFailure, recordSuccess, same, sessionId } from '../session.ts'
 
 /** Помилки ключів — це 400 з поясненням, а не 500. */
@@ -63,7 +64,7 @@ const pub = (k: PasskeyRow) => ({ id: k.id, name: k.name, kind: k.kind, backedUp
 
 /** «Вхід і безпека» в налаштуваннях: ключі, сесії, вхід за паролем. Лише після входу. */
 export async function accountRoutes({ req, res, path, method }: Ctx): Promise<boolean> {
-  if (path === '/api/me') return send(res, 200, { username: loadConfig().username })
+  if (path === '/api/me') return send(res, 200, { username: loadConfig().username, kb: VAULT_ENABLED })
   if (!path.startsWith('/api/auth/')) return false
   const sid = sessionId(req)
   const security = () => ({
