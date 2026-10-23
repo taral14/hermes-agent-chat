@@ -1604,12 +1604,9 @@ button.act-line:hover:not(:disabled) {
   align-items: flex-start;
   gap: 6px;
   margin: 2px 4px 4px;
-  padding: 6px 4px 6px 12px;
+  padding: 6px 4px 6px 14px;
   border-radius: 14px;
   background: var(--hover);
-  border-left: 3px solid var(--border-strong);
-  border-top-left-radius: 4px;
-  border-bottom-left-radius: 4px;
 }
 
 .composer-quote-text {
