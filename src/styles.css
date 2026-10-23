@@ -1599,6 +1599,40 @@ button.act-line:hover:not(:disabled) {
   opacity: 0.25;
 }
 
+.composer-quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 2px 4px 4px;
+  padding: 6px 4px 6px 12px;
+  border-radius: 14px;
+  background: var(--hover);
+  border-left: 3px solid var(--border-strong);
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.composer-quote-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.icon-btn.composer-quote-x {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  color: var(--text-3);
+}
+
 .composer-files {
   display: flex;
   flex-wrap: wrap;

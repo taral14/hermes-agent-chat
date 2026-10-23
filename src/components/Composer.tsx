@@ -84,12 +84,26 @@ function ModePicker({ mode, onMode }: { mode: ChatMode; onMode: (m: ChatMode) =>
 }
 
 const drafts = new Map<string, string>()
+/** Цитата з відповіді над полем, окремо від тексту: у повідомлення йде рядками «> …» перед ним. */
+const quotes = new Map<string, string>()
+
+const quoteBlock = (quote: string) =>
+  quote
+    .split('\n')
+    .map((l) => `> ${l}`.trimEnd())
+    .join('\n')
 
 /** Підготувати текст у полі вводу чату (напр. «Обговорити з Hermes» з бази знань). */
 export const setDraft = (key: string, text: string) => drafts.set(key, text)
 
 export function Composer({ ref, running, answering, onSend, onStop, onSteer, onBtw, onError, draftKey, commands, mode, onMode, modelSlot }: Props) {
   const [text, setText] = useState(() => drafts.get(draftKey) ?? '')
+  const [quote, setQuoteState] = useState(() => quotes.get(draftKey) ?? '')
+  const setQuote = (key: string, q: string) => {
+    if (q) quotes.set(key, q)
+    else quotes.delete(key)
+    if (key === keyRef.current) setQuoteState(q)
+  }
   const [files, setFiles] = useState<Pending[]>([])
   const [busy, setBusy] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
@@ -100,6 +114,7 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
 
   useEffect(() => {
     setText(drafts.get(draftKey) ?? '')
+    setQuoteState(quotes.get(draftKey) ?? '')
     setFiles([])
     // На телефоні фокус відкрив би клавіатуру й закрив пів відповіді: там поле фокусує лише «Новий чат».
     if (!matchMedia('(pointer: coarse)').matches) area.current?.focus()
@@ -159,18 +174,9 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
     }
   }
 
-  /** Цитата з відповіді: «> …» над тим, що вже набрано, курсор у кінці. */
-  const insertQuote = (quote: string) => {
-    const block = quote
-      .trim()
-      .split('\n')
-      .map((l) => `> ${l}`.trimEnd())
-      .join('\n')
-    setText((prev) => {
-      const next = `${block}\n\n${prev.replace(/^\s+/, '')}`
-      drafts.set(draftKey, next)
-      return next
-    })
+  /** Цитата з відповіді стає блоком над полем (нова замінює попередню), курсор у кінці тексту. */
+  const insertQuote = (q: string) => {
+    setQuote(draftKey, q.trim())
     requestAnimationFrame(() => {
       const el = area.current
       if (!el) return
@@ -211,17 +217,19 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
 
   const uploading = files.some((f) => !f.att && !f.error)
   const ready = files.filter((f) => f.att).map((f) => f.att!)
-  const canSend = !busy && !uploading && (text.trim().length > 0 || (!running && ready.length > 0))
+  const canSend = !busy && !uploading && (text.trim().length > 0 || (!running && (ready.length > 0 || !!quote)))
 
   const submit = async (aside = false) => {
     if (!canSend) return
     const key = draftKey
     const steering = running
+    const body = quote ? `${quoteBlock(quote)}\n\n${text.trim()}`.trim() : text.trim()
     setBusy(true)
-    const ok = steering ? await (aside && onBtw ? onBtw(text.trim()) : onSteer(text.trim())) : await onSend(text.trim(), ready)
+    const ok = steering ? await (aside && onBtw ? onBtw(body) : onSteer(body)) : await onSend(body, ready)
     setBusy(false)
     if (!ok) return
     drafts.delete(key)
+    setQuote(key, '')
     // Поки йшло надсилання, людина могла перейти в інший чат: його чернетку не чіпаємо.
     if (keyRef.current !== key) return
     setText('')
@@ -287,6 +295,14 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
             ))}
           </div>
         )}
+        {quote && (
+          <div className="composer-quote">
+            <span className="composer-quote-text">{quote}</span>
+            <button type="button" className="icon-btn composer-quote-x" title="Прибрати цитату" aria-label="Прибрати цитату" onMouseDown={(e) => e.preventDefault()} onClick={() => setQuote(draftKey, '')}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <textarea
           ref={area}
           rows={1}
@@ -297,6 +313,11 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
             drafts.set(draftKey, e.target.value)
           }}
           onKeyDown={(e) => {
+            // Backspace у порожньому полі прибирає цитату, як у месенджерах.
+            if (e.key === 'Backspace' && quote && !text && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              return setQuote(draftKey, '')
+            }
             if (menuOpen) {
               if (e.key === 'ArrowDown') {
                 e.preventDefault()
