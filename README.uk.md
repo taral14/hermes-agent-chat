@@ -51,6 +51,12 @@
 
 ## Встановлення
 
+**Хай це зробить Hermes.** Напиши Hermes: *Встанови Hermes Chat за інструкцією
+https://raw.githubusercontent.com/taral14/hermes-agent-chat/main/INSTALL.md*. Він спитає кілька речей, встановить,
+перевірить і покаже адресу й пароль. Кроки, за якими він іде, — в [INSTALL.md](INSTALL.md).
+
+Вручну:
+
 ```sh
 git clone https://github.com/taral14/hermes-agent-chat.git && cd hermes-agent-chat
 npm ci
@@ -130,7 +136,7 @@ Hermes сканує `~/.hermes/plugins/`: тека там із `plugin.json` з'
 ### Часовий пояс розкладу
 
 Hermes рахує розклад у поясі з `timezone:` у `~/.hermes/config.yaml`. Якщо там порожньо, після переходу
-на літній чи зимовий час задачі зсуваються на годину. Задай пояс, наприклад `timezone: Europe/Kyiv`;
+на літній чи зимовий час перший запуск задачі може зсунутись на годину. Задай пояс, наприклад `timezone: Europe/Kyiv`;
 `npm run doctor` це перевіряє.
 
 ## Налаштування (`.env`)

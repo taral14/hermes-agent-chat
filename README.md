@@ -54,6 +54,12 @@ version it was tested with, and `npm run doctor` warns when your Hermes is older
 
 ## Install
 
+**Let Hermes do it.** Tell Hermes: *Install Hermes Chat by following
+https://raw.githubusercontent.com/taral14/hermes-agent-chat/main/INSTALL.md*. It asks a few questions, installs,
+checks and reports the address and the password. [INSTALL.md](INSTALL.md) has the steps it follows.
+
+By hand:
+
 ```sh
 git clone https://github.com/taral14/hermes-agent-chat.git && cd hermes-agent-chat
 npm ci
@@ -166,7 +172,7 @@ which keeps a copy in `data/vault/`.
 ### Time zone for scheduled tasks
 
 Hermes evaluates schedules in the time zone from `timezone:` in `~/.hermes/config.yaml`. If it is empty,
-tasks can shift by an hour after a daylight-saving change. Set it, e.g. `timezone: Europe/Kyiv`;
+the first run after a daylight-saving change can be an hour off. Set it, e.g. `timezone: Europe/Kyiv`;
 `npm run doctor` checks this.
 
 ## Configuration (`.env`)

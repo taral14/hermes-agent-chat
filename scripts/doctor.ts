@@ -108,7 +108,7 @@ else {
   }
   const local = Intl.DateTimeFormat().resolvedOptions().timeZone
   if (tz.trim()) ok(`часовий пояс розкладу: ${tz}`)
-  else warn('у Hermes не задано часовий пояс: після переходу на літній чи зимовий час задачі зсуваються на годину', `додай timezone: ${local} у ${hermesPath('config.yaml')}`)
+  else warn('у Hermes не задано часовий пояс: після переходу на літній чи зимовий час перший запуск задачі може зсунутись на годину', `додай timezone: ${local} у ${hermesPath('config.yaml')}`)
 }
 
 section('Hermes пише в чат (плагін webchat, необов’язково)')
