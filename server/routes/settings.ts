@@ -15,8 +15,6 @@ import { translate } from '../translate.ts'
 import { unfurl } from '../unfurl.ts'
 import { vaultInfo } from '../vault.ts'
 
-const STARTED_AT = Date.now()
-
 /** Версія для «Про застосунок»: з package.json, а в git-копії ще й коміт. */
 export const VERSION = (() => {
   let version = 'невідома'
@@ -108,7 +106,7 @@ export async function settingsRoutes({ req, res, url, path, method }: Ctx): Prom
   if (path === '/api/settings' && method === 'GET') {
     const info: SettingsInfo = {
       prefs: chatPrefs(),
-      about: { version: VERSION, startedAt: STARTED_AT, hermes: await gateway.check(), vault: (await vaultInfo()).available },
+      about: { version: VERSION, hermes: await gateway.check(), vault: (await vaultInfo()).available },
     }
     return send(res, 200, info)
   }

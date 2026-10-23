@@ -32,7 +32,7 @@ import { Switch } from './ui/Switch.tsx'
 import { api } from '../api.ts'
 import { formatSize } from '../fileKind.ts'
 import { TEXT_SIZES, type Theme, setPrefs, usePrefs } from '../prefs.ts'
-import { relative } from '../schedule.ts'
+import { plural, relative } from '../schedule.ts'
 import type { ChatPrefs, ModelOptions, SettingsInfo, ShareListItem, StorageInfo } from '../shared.ts'
 import { MODES } from './Composer.tsx'
 import { ModelPicker, prettyModel } from './ModelPicker.tsx'
@@ -204,7 +204,7 @@ function Chats({ prefs, models, onChange }: { prefs: ChatPrefs; models: ModelOpt
         ))}
       </Group>
 
-      <Group title="Модель і зусилля" foot="«Авто» бере модель і зусилля з налаштувань Hermes. Telegram це не змінює.">
+      <Group title="Модель і зусилля" foot="«Авто» бере модель і зусилля з налаштувань Hermes. Інших каналів Hermes це не стосується.">
         <div className="set-row set-model">
           <span className="set-row-text">
             <span className="set-row-title">Для нових чатів</span>
@@ -214,7 +214,7 @@ function Chats({ prefs, models, onChange }: { prefs: ChatPrefs; models: ModelOpt
         </div>
       </Group>
 
-      <Group title="Особисті інструкції" foot="Додаються до кожного запиту з цього чату. Telegram і задачі за розкладом не зачіпають.">
+      <Group title="Особисті інструкції" foot="Додаються до кожного запиту з цього чату. Інші канали Hermes і задачі за розкладом не зачіпають.">
         <div className="set-instructions">
           <textarea
             value={draft}
@@ -293,7 +293,7 @@ function Hermes({ info, models, onJobs }: { info: SettingsInfo | null; models: M
           </span>
         </div>
       </Group>
-      <Group foot="Задачі зазвичай живуть у своїх чатах. Тут — усі разом, зокрема ті, що пишуть у Telegram, і службові скрипти.">
+      <Group foot="Задачі зазвичай живуть у своїх чатах. Тут — усі разом, зокрема ті, що пишуть в інші канали Hermes, і службові скрипти.">
         <NavRow Icon={CalendarClock} title="Усі задачі за розкладом" onClick={onJobs} />
       </Group>
     </>
@@ -389,7 +389,7 @@ function Data({ onDeletedAll }: { onDeletedAll: () => void }) {
         <div className="set-row">
           <span className="set-row-text">
             <span className="set-row-title">Файли в чатах</span>
-            {storage && storage.macFiles > 0 && <span className="set-row-hint">Ще {storage.macFiles} великих файлів лежать на місці й місця не займають</span>}
+            {storage && storage.macFiles > 0 && <span className="set-row-hint">Ще {storage.macFiles} {plural(storage.macFiles, 'файл відкривається', 'файли відкриваються', 'файлів відкриваються')} прямо з диска</span>}
           </span>
           <span className="set-value">{storage ? `${storage.files} · ${formatSize(storage.bytes)}` : '…'}</span>
         </div>
@@ -473,18 +473,12 @@ function Data({ onDeletedAll }: { onDeletedAll: () => void }) {
 
 function About({ info }: { info: SettingsInfo | null }) {
   return (
-    <Group foot="Свій чат для Hermes Agent: React, SQLite і рідний протокол Hermes.">
+    <Group>
       <div className="set-row">
         <span className="set-row-text">
           <span className="set-row-title">Версія</span>
         </span>
         <span className="set-value mono">{info?.about.version ?? '…'}</span>
-      </div>
-      <div className="set-row">
-        <span className="set-row-text">
-          <span className="set-row-title">Сервер запущено</span>
-        </span>
-        <span className="set-value">{info ? relative(info.about.startedAt) : '…'}</span>
       </div>
     </Group>
   )
