@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 
 /**
  * «Запитати Hermes» біля виділеного тексту у відповіді: цитата йде в поле вводу, далі дописуєш питання.
- * На iPhone над виділенням стоїть системне меню, тому там кнопка з'являється під текстом.
+ * На телефоні біля виділення системне меню, тому там кнопка стоїть над полем вводу.
  */
 export function SelectionAsk({ onAsk }: { onAsk: (text: string) => void }) {
   const [pos, setPos] = useState<{ x: number; y: number; below: boolean } | null>(null)
@@ -23,7 +23,13 @@ export function SelectionAsk({ onAsk }: { onAsk: (text: string) => void }) {
       const r = range.getBoundingClientRect()
       if (!r.width && !r.height) return setPos(null)
       picked.current = text.slice(0, 2000)
-      const below = matchMedia('(pointer: coarse)').matches || r.top < 80
+      if (matchMedia('(pointer: coarse)').matches) {
+        // На телефоні біля виділення стоїть системне меню (то над ним, то під ним), тому кнопка
+        // чекає над полем вводу: там вона його не перекриває.
+        const c = document.querySelector('.composer')?.getBoundingClientRect()
+        return setPos({ x: c ? c.left + c.width / 2 : window.innerWidth / 2, y: (c ? c.top : window.innerHeight - 90) - 12, below: false })
+      }
+      const below = r.top < 80
       setPos({
         x: Math.min(Math.max(r.left + r.width / 2, 90), window.innerWidth - 90),
         y: below ? Math.min(r.bottom + 12, window.innerHeight - 60) : r.top - 10,
