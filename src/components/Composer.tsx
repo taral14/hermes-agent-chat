@@ -297,7 +297,7 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
         )}
         {quote && (
           <div className="composer-quote">
-            <span className="composer-quote-text">{quote}</span>
+            <span className="composer-quote-text">{quote.replace(/\n\s*\n+/g, '\n')}</span>
             <button type="button" className="icon-btn composer-quote-x" title="Прибрати цитату" aria-label="Прибрати цитату" onMouseDown={(e) => e.preventDefault()} onClick={() => setQuote(draftKey, '')}>
               <X size={14} />
             </button>
