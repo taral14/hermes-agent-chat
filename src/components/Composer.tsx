@@ -334,7 +334,14 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
             }
           }}
         />
-        <div className="composer-bar">
+        <div
+          className="composer-bar"
+          onMouseDown={(e) => {
+            // Кнопки не забирають фокус у поля: інакше перше торкання лише ховає клавіатуру, поле
+            // зсувається (на стартовому екрані стрибає на середину), і натискання пролітає повз кнопку.
+            if (document.activeElement === area.current && (e.target as Element).closest('button')) e.preventDefault()
+          }}
+        >
           <button type="button" className="icon-btn round" title="Прикріпити файл" aria-label="Прикріпити файл" onClick={() => picker.current?.click()}>
             <Paperclip size={18} />
           </button>
