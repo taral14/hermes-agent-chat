@@ -217,13 +217,13 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
 
   const uploading = files.some((f) => !f.att && !f.error)
   const ready = files.filter((f) => f.att).map((f) => f.att!)
-  const canSend = !busy && !uploading && (text.trim().length > 0 || (!running && (ready.length > 0 || !!quote)))
+  const canSend = !busy && !uploading && (text.trim().length > 0 || (!running && ready.length > 0))
 
   const submit = async (aside = false) => {
     if (!canSend) return
     const key = draftKey
     const steering = running
-    const body = quote ? `${quoteBlock(quote)}\n\n${text.trim()}`.trim() : text.trim()
+    const body = quote ? `${quoteBlock(quote)}\n\n${text.trim()}`.trimEnd() : text.trim()
     setBusy(true)
     const ok = steering ? await (aside && onBtw ? onBtw(body) : onSteer(body)) : await onSend(body, ready)
     setBusy(false)
