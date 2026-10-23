@@ -213,10 +213,12 @@ export default function App() {
     if (currentId && currentUnread && visible && !covered) markRead(currentId)
   }, [currentId, currentUnread, visible, covered, markRead])
 
+  // Бейдж на іконці ставить і пуш, поки застосунок згорнутий: тоді число тут могло не змінитись (відповідь
+  // прочитали деінде чи вже після пуша), тож звіряємо його ще й щоразу, як застосунок відкривають.
   useEffect(() => {
     if (auth !== 'in' || !('setAppBadge' in navigator)) return
     void (unreadTotal ? navigator.setAppBadge(unreadTotal) : navigator.clearAppBadge()).catch(() => {})
-  }, [auth, unreadTotal])
+  }, [auth, unreadTotal, visible])
 
   useEffect(() => {
     const page =
