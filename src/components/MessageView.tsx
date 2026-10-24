@@ -1,8 +1,9 @@
 // Повідомлення в розмові: питання користувача й відповідь Hermes з ходом роботи, запитами й вкладеннями.
 import { AlertTriangle, GitBranch, Loader2, MessageCircleQuestion, Pencil, RotateCcw, Target } from 'lucide-react'
-import { createContext, memo, useContext, useRef, useState, type ReactNode } from 'react'
+import { createContext, memo, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
 import { isPublicView } from '../api.ts'
 import { useAutosize } from '../hooks/useAutosize.ts'
+import { cardedUrls, dropCardedUrls, findUrls } from '../links.ts'
 import { usePrefs } from '../prefs.ts'
 import type { Message, Part } from '../shared.ts'
 import { AnswerLinks, LinkPreviews, LinkText } from './Links.tsx'
@@ -80,6 +81,9 @@ function UserMessage({ m }: { m: Message }) {
   useAutosize(box, editing && draft, 320)
   const canEdit = Boolean(actions?.enabled && m.turn && m.text && !m.text.startsWith('/'))
   const { quote, rest } = splitQuote(m.text)
+  const isCommand = m.text.startsWith('/')
+  // Посилання в кінці, що стало карткою, у бульбашці не дублюємо; повідомлення з одного посилання — сама картка.
+  const shown = useMemo(() => (isCommand ? rest : dropCardedUrls(rest, findUrls(rest, 3))), [rest, isCommand])
 
   if (editing && actions) {
     return (
@@ -121,19 +125,19 @@ function UserMessage({ m }: { m: Message }) {
   return (
     <div className="msg msg-user" id={`msg-${m.id}`}>
       <Attachments items={m.attachments} side="user" />
-      {m.text && (
-        <div className={`bubble ${m.text.startsWith('/') ? 'is-command' : ''}`}>
-          {m.text.startsWith('/') ? (
+      {m.text && (isCommand || quote || shown) && (
+        <div className={`bubble ${isCommand ? 'is-command' : ''}`}>
+          {isCommand ? (
             m.text
           ) : (
             <>
               {quote && <div className="bubble-quote">{quote}</div>}
-              {rest && <LinkText text={rest} />}
+              {shown && <LinkText text={shown} />}
             </>
           )}
         </div>
       )}
-      {rest && !m.text.startsWith('/') && <LinkPreviews text={rest} />}
+      {rest && !isCommand && <LinkPreviews text={rest} />}
       {m.text && (
         <div className="msg-actions msg-actions-user">
           {canEdit && (
@@ -226,6 +230,8 @@ function AssistantMessage({ m }: { m: Message }) {
   const { showMeta } = usePrefs()
   const active = ACTIVE.has(m.status)
   const { activity, answer } = splitParts(m)
+  // Поки відповідь стрімиться, карток ще немає — посилання лишається в тексті.
+  const shownAnswer = useMemo(() => (active ? answer : dropCardedUrls(answer, cardedUrls(answer))), [active, answer])
   const pending = m.parts.filter(
     (p): p is Extract<Part, { type: 'approval' | 'clarify' }> =>
       (p.type === 'approval' || p.type === 'clarify') && p.state === 'pending',
@@ -253,7 +259,7 @@ function AssistantMessage({ m }: { m: Message }) {
       ))}
       {answer && (
         <div className={active ? 'answer is-streaming' : 'answer'}>
-          <Markdown text={answer} />
+          <Markdown text={shownAnswer} />
         </div>
       )}
       {!active && <JobChips parts={m.parts} />}

@@ -1,7 +1,7 @@
 import { Globe, Play } from 'lucide-react'
 import { createContext, useContext, useEffect, useState } from 'react'
 import { unfurl } from '../api.ts'
-import { answerUrls, findUrls, splitLinks, youtubeId } from '../links.ts'
+import { answerUrls, findUrls, shortUrl, splitLinks, youtubeId } from '../links.ts'
 import type { LinkPreview } from '../shared.ts'
 
 /** Звідки брати картки: у чаті — із сервера, на сторінці спільного доступу — з уже готового знімка. */
@@ -13,12 +13,6 @@ const hostOf = (url: string) => {
   } catch {
     return url
   }
-}
-
-/** https://www.example.com/a/b?c → example.com/a/b?c, довгі обрізаємо. */
-function shortUrl(url: string) {
-  const s = url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')
-  return s.length > 64 ? `${s.slice(0, 61)}…` : s
 }
 
 /** Текст повідомлення, у якому адреси стають посиланнями. */

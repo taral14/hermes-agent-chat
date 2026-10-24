@@ -3,6 +3,7 @@ import { describe, test } from 'node:test'
 import { emit, on } from '../src/bus.ts'
 import { linkifyNotes } from '../src/kb.ts'
 import { looksEnglish } from '../src/lang.ts'
+import { cardedUrls, dropCardedUrls } from '../src/links.ts'
 import { matches, pluginTitle } from '../src/plugins.ts'
 import { chatUrl, jobsUrl, kbUrl, parseRoute, pluginsUrl } from '../src/router.ts'
 import type { KbNote, Plugin } from '../src/shared.ts'
@@ -83,4 +84,30 @@ describe('згадки нотаток у відповіді', () => {
   test('неоднозначна назва лишається текстом', () => {
     assert.equal(linkifyNotes('[[Kirby]]', [...notes, note('Other/Kirby.md')], 'Vault'), '[[Kirby]]')
   })
+})
+
+describe('посилання, що стали картками', () => {
+  const imdb = 'https://www.imdb.com/title/tt49058294/'
+  test('у кінці рядка — прибираємо, картка його показує', () => {
+    assert.equal(dropCardedUrls(`Це короткометражка: ${imdb}`, [imdb]), 'Це короткометражка:')
+    assert.equal(dropCardedUrls(`Дивись ${imdb}.`, [imdb]), 'Дивись')
+    assert.equal(dropCardedUrls(`Перший абзац.\n\n${imdb}\n\nДругий.`, [imdb]), 'Перший абзац.\n\nДругий.')
+    assert.equal(dropCardedUrls(imdb, [imdb]), '')
+  })
+  test('посеред речення, у коді, у списку й без картки — лишаємо', () => {
+    assert.equal(dropCardedUrls(`Ось ${imdb} і ще текст`, [imdb]), `Ось ${imdb} і ще текст`)
+    assert.equal(dropCardedUrls(`- ${imdb}`, [imdb]), `- ${imdb}`)
+    assert.equal(dropCardedUrls(`\`\`\`\ncurl ${imdb}\n\`\`\``, [imdb]), `\`\`\`\ncurl ${imdb}\n\`\`\``)
+    assert.equal(dropCardedUrls(`Дивись ${imdb}`, []), `Дивись ${imdb}`)
+    assert.equal(dropCardedUrls(`Дивись [IMDb](${imdb})`, [imdb]), `Дивись [IMDb](${imdb})`)
+  })
+  test('три й більше посилань у відповіді — «Джерела», а не картки', () => {
+    assert.deepEqual(cardedUrls(`a https://a.com/1 b https://b.com/2`), ['https://a.com/1', 'https://b.com/2'])
+    assert.deepEqual(cardedUrls(`https://a.com/1 https://b.com/2 https://c.com/3`), [])
+  })
+})
+
+test('кілька посилань із картками в кінці рядка прибираємо всі', () => {
+  assert.equal(dropCardedUrls('А ці дві: https://a.com/1 https://b.com/2', ['https://a.com/1', 'https://b.com/2']), 'А ці дві:')
+  assert.equal(dropCardedUrls('Ось https://a.com/1 https://b.com/2', ['https://b.com/2']), 'Ось https://a.com/1')
 })

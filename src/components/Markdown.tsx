@@ -5,6 +5,7 @@ import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
 import { emit } from '../bus.ts'
 import { linkifyNotes, notePath, useNoteIndex } from '../kb.ts'
+import { shortUrl } from '../links.ts'
 
 function textOf(node: ReactNode): string {
   if (node == null || typeof node === 'boolean') return ''
@@ -86,9 +87,11 @@ const components: Components = {
         </a>
       )
     }
+    // Голу адресу показуємо коротко, як у повідомленнях користувача: без https://www.
+    const bare = href && /^https?:\/\//.test(href) && textOf(children) === href
     return (
-      <a href={href} target="_blank" rel="noreferrer noopener">
-        {children}
+      <a href={href} target="_blank" rel="noreferrer noopener" title={bare ? href : undefined}>
+        {bare ? shortUrl(href) : children}
       </a>
     )
   },

@@ -90,3 +90,46 @@ export function answerUrls(text: string, max = 10): { videos: string[]; links: s
   }
   return { videos, links: links.slice(0, max), total: links.length }
 }
+
+/** https://www.example.com/a/b?c → example.com/a/b?c, довгі обрізаємо. */
+export function shortUrl(url: string) {
+  const s = url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')
+  return s.length > 64 ? `${s.slice(0, 61)}…` : s
+}
+
+/** Посилання з відповіді, які стають картками під нею (як у AnswerLinks): відео і одне-два звичайні. */
+export function cardedUrls(text: string): string[] {
+  const { videos, links } = answerUrls(text)
+  return [...videos, ...(links.length <= 2 ? links : [])]
+}
+
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)]|>)?\s*$/
+
+/**
+ * Голе посилання в кінці рядка, для якого під повідомленням є картка, з тексту прибираємо: картка вже показує
+ * і його, і куди воно веде («Ось огляд: https://…» → «Ось огляд:» + картка). Посилання посеред речення,
+ * у коді, таблиці чи окремим пунктом списку лишаються.
+ */
+export function dropCardedUrls(text: string, carded: string[]): string {
+  if (!carded.length) return text
+  let code = false
+  const out: string[] = []
+  for (const line of text.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) code = !code
+    if (code || line.includes('|') || line.includes('`')) {
+      out.push(line)
+      continue
+    }
+    // Знімаємо з кінця рядка посилання з картками одне за одним («А ці дві: https://a https://b»).
+    let rest = line
+    for (;;) {
+      const m = /(^|\s)(https?:\/\/[^\s<>"'`]+)\s*$/.exec(rest)
+      if (!m || !carded.includes(trimUrl(m[2]!))) break
+      rest = rest.slice(0, m.index).trimEnd()
+    }
+    if (rest === line) out.push(line)
+    else if (!rest) continue
+    else out.push(LIST_ITEM.test(rest) ? line : rest)
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
