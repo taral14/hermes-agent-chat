@@ -511,6 +511,24 @@ export function saveLinkPreview(url: string, data: string) {
   db.prepare('INSERT INTO link_previews (url, data, fetched_at) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at').run(url, data, Date.now())
 }
 
+/** Чи є та сама картинка в картці іншої сторінки того ж сайту. */
+export function imageUsedElsewhere(url: string, image: string): boolean {
+  let host: string
+  try {
+    host = new URL(url).hostname
+  } catch {
+    return false
+  }
+  const rows = db.prepare("SELECT url FROM link_previews WHERE url != ? AND json_extract(data, '$.image') = ? LIMIT 20").all(url, image)
+  return rows.some((r) => {
+    try {
+      return new URL(str(r.url)).hostname === host
+    } catch {
+      return false
+    }
+  })
+}
+
 export function countLinkPreviews(): number {
   return Number((db.prepare('SELECT COUNT(*) AS n FROM link_previews').get() as { n: number }).n)
 }

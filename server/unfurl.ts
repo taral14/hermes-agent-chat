@@ -12,7 +12,8 @@ import { pipeline } from 'node:stream'
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
 import { youtubeId } from '../src/links.ts'
 import type { LinkPreview } from '../src/shared.ts'
-import { getLinkPreview, saveLinkPreview } from './db.ts'
+import { cardLayout, imageSize, type CardFacts } from './cardLayout.ts'
+import { getLinkPreview, imageUsedElsewhere, saveLinkPreview } from './db.ts'
 import { PUBLIC_URL } from './config.ts'
 
 const PRIVATE = new BlockList()
@@ -168,7 +169,7 @@ function httpsUrl(raw: string | undefined, base: string): string | undefined {
   }
 }
 
-function parsePage(html: string, finalUrl: string, url: string): LinkPreview {
+function parsePage(html: string, finalUrl: string, url: string): { preview: LinkPreview; facts: CardFacts } {
   const head = html.split(/<\/head>/i)[0] ?? html
   const meta: Record<string, string> = {}
   for (const m of head.matchAll(/<meta\b[^>]*>/gi)) {
@@ -186,15 +187,56 @@ function parsePage(html: string, finalUrl: string, url: string): LinkPreview {
     else if (/\bicon\b/.test(rel)) icon ??= a.href
   }
   const host = new URL(finalUrl).hostname.replace(/^www\./, '')
+  const image = httpsUrl(meta['og:image:secure_url'] ?? meta['og:image'] ?? meta['og:image:url'] ?? meta['twitter:image'] ?? meta['twitter:image:src'], finalUrl)
+  const num = (v: string | undefined) => (v && /^\d+$/.test(v.trim()) ? Number(v) : undefined)
   return {
-    url,
-    kind: 'link',
-    title: clean(meta['og:title'] ?? meta['twitter:title'] ?? /<title[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1], 200),
-    description: clean(meta['og:description'] ?? meta['twitter:description'] ?? meta.description, 300),
-    image: httpsUrl(meta['og:image:secure_url'] ?? meta['og:image'] ?? meta['og:image:url'] ?? meta['twitter:image'] ?? meta['twitter:image:src'], finalUrl),
-    siteName: clean(meta['og:site_name'], 60) ?? host,
-    icon: httpsUrl(touch ?? icon ?? '/favicon.ico', finalUrl),
+    preview: {
+      url,
+      kind: 'link',
+      title: clean(meta['og:title'] ?? meta['twitter:title'] ?? /<title[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1], 200),
+      description: clean(meta['og:description'] ?? meta['twitter:description'] ?? meta.description, 300),
+      image,
+      siteName: clean(meta['og:site_name'], 60) ?? host,
+      icon: httpsUrl(touch ?? icon ?? '/favicon.ico', finalUrl),
+    },
+    facts: {
+      url: finalUrl,
+      image,
+      width: num(meta['og:image:width']),
+      height: num(meta['og:image:height']),
+      type: meta['og:type'],
+      card: meta['twitter:card'],
+    },
   }
+}
+
+/** Вигляд картинки картки (див. cardLayout.ts). Розміру немає в метатегах — читаємо початок самої картинки. */
+async function withLayout({ preview, facts }: { preview: LinkPreview; facts: CardFacts }, ancestors: boolean): Promise<LinkPreview> {
+  if (cardLayout(facts) && ancestors && (await siteImage(facts.url, facts.image!))) facts.image = undefined
+  if (cardLayout(facts) && !(facts.width && facts.height)) {
+    try {
+      const r = await fetchLimited(facts.image!, 'image/*', 128 * 1024)
+      Object.assign(facts, imageSize(r.body))
+    } catch {
+      /* без розміру — за типом сторінки */
+    }
+  }
+  // Картинку зберігаємо й тоді, коли її не показуємо: з нею звіряються інші сторінки того ж сайту.
+  return { ...preview, imageLayout: cardLayout(facts) ?? 'none' }
+}
+
+const sameImage = (a: string, b: string) => a.split('?')[0] === b.split('?')[0]
+
+/**
+ * Чи це картинка всього сайту чи розділу: та сама, що на головній (example.com/) або в корені розділу
+ * (example.com/docs/ для example.com/docs/guide/mcp). Ці сторінки теж ідуть у кеш карток.
+ */
+async function siteImage(pageUrl: string, image: string): Promise<boolean> {
+  const u = new URL(pageUrl)
+  const segs = u.pathname.split('/').filter(Boolean)
+  const roots = [`${u.origin}/`, ...(segs.length >= 2 ? [`${u.origin}/${segs[0]}/`] : [])]
+  const found = await Promise.all(roots.map((r) => load(r, false).catch(() => null)))
+  return found.some((d) => d?.image && sameImage(d.image, image))
 }
 
 // ---------- YouTube ----------
@@ -216,14 +258,29 @@ const inflight = new Map<string, Promise<LinkPreview>>()
 /** Картка з кешу, без походу в мережу (для сторінки спільного доступу). */
 export function cachedPreview(url: string): LinkPreview | null {
   const c = getLinkPreview(url)
-  return c ? (JSON.parse(c.data) as LinkPreview) : null
+  return c ? served(JSON.parse(c.data) as LinkPreview) : null
+}
+
+/** Що віддати клієнту: картинку — лише ту, яку варто показати. */
+function served(d: LinkPreview): LinkPreview {
+  if (d.kind !== 'link' || !d.image) return d
+  // Та сама картинка на іншій сторінці того ж сайту — це заставка сайту, а не фото сторінки.
+  if (d.imageLayout === 'none' || !d.imageLayout || imageUsedElsewhere(d.url, d.image)) return { ...d, image: undefined, imageLayout: undefined }
+  return d
 }
 
 export async function unfurl(url: string): Promise<LinkPreview> {
+  return served(await load(url, true))
+}
+
+/** Картка як вона в кеші, з картинкою. ancestors — чи звіряти картинку з головною сторінкою сайту. */
+async function load(url: string, ancestors: boolean): Promise<LinkPreview> {
   const c = getLinkPreview(url)
   if (c) {
     const d = JSON.parse(c.data) as LinkPreview
-    if (Date.now() - c.fetchedAt < (d.failed ? FAIL_TTL : OK_TTL)) return d
+    // Картки, збережені до появи imageLayout, перечитуємо.
+    const stale = d.kind === 'link' && d.image && !d.imageLayout
+    if (!stale && Date.now() - c.fetchedAt < (d.failed ? FAIL_TTL : OK_TTL)) return d
   }
   const running = inflight.get(url)
   if (running) return running
@@ -235,7 +292,7 @@ export async function unfurl(url: string): Promise<LinkPreview> {
       else {
         const r = await fetchLimited(url, 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5', 768 * 1024, '</head>')
         if (!/html|xml/i.test(r.type) && r.type) throw new Error('Не HTML')
-        d = parsePage(decode(r.body, r.type), r.url, url)
+        d = await withLayout(parsePage(decode(r.body, r.type), r.url, url), ancestors)
       }
     } catch {
       // YouTube без oEmbed (приватне чи видалене відео) все одно має обкладинку.

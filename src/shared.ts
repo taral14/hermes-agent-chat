@@ -212,6 +212,11 @@ export type LinkPreview = {
   title?: string
   description?: string
   image?: string
+  /**
+   * Велика картинка зверху — лише фото саме цієї сторінки; мініатюра збоку — обкладинки, товари, малі картинки;
+   * none — заставка сайту (лише в кеші сервера, клієнт картинки не отримує).
+   */
+  imageLayout?: 'large' | 'thumb' | 'none'
   siteName?: string
   icon?: string
   videoId?: string

@@ -95,7 +95,8 @@ function YouTubeCard({ url, p }: { url: string; p: LinkPreview | null }) {
   )
 }
 
-function LinkCard({ url, p }: { url: string; p: LinkPreview | null }) {
+/** Кілька карток поспіль — усі з мініатюрами: дві-три великі картинки підряд забивають екран. */
+function LinkCard({ url, p, many }: { url: string; p: LinkPreview | null; many: boolean }) {
   const [imgOk, setImgOk] = useState(true)
   const [iconOk, setIconOk] = useState(true)
   const host = hostOf(url)
@@ -112,9 +113,10 @@ function LinkCard({ url, p }: { url: string; p: LinkPreview | null }) {
       </a>
     )
   }
+  const image = p.image && imgOk ? (p.imageLayout === 'large' && !many ? 'large' : 'thumb') : null
   return (
-    <a className="link-card" href={url} target="_blank" rel="noreferrer noopener">
-      {p.image && imgOk && (
+    <a className={`link-card ${image === 'thumb' ? 'has-thumb' : ''}`} href={url} target="_blank" rel="noreferrer noopener">
+      {image === 'large' && (
         <span className="link-card-image">
           <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setImgOk(false)} />
         </span>
@@ -127,11 +129,16 @@ function LinkCard({ url, p }: { url: string; p: LinkPreview | null }) {
         <span className="link-card-title">{p.title}</span>
         {p.description && <span className="link-card-desc">{p.description}</span>}
       </span>
+      {image === 'thumb' && (
+        <span className="link-card-thumb">
+          <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setImgOk(false)} />
+        </span>
+      )}
     </a>
   )
 }
 
-function Preview({ url }: { url: string }) {
+function Preview({ url, many = false }: { url: string; many?: boolean }) {
   const resolve = useContext(PreviewContext)
   const [p, setP] = useState<LinkPreview | null>(null)
   useEffect(() => {
@@ -141,7 +148,7 @@ function Preview({ url }: { url: string }) {
       alive = false
     }
   }, [url, resolve])
-  return youtubeId(url) ? <YouTubeCard url={url} p={p} /> : <LinkCard url={url} p={p} />
+  return youtubeId(url) ? <YouTubeCard url={url} p={p} /> : <LinkCard url={url} p={p} many={many} />
 }
 
 /** Картки для посилань з повідомлення (до трьох), під бульбашкою. */
@@ -151,7 +158,7 @@ export function LinkPreviews({ text }: { text: string }) {
   return (
     <div className="link-previews">
       {urls.map((u) => (
-        <Preview key={u} url={u} />
+        <Preview key={u} url={u} many={urls.filter((x) => !youtubeId(x)).length > 1} />
       ))}
     </div>
   )
@@ -191,7 +198,7 @@ export function AnswerLinks({ text }: { text: string }) {
         <Preview key={u} url={u} />
       ))}
       {links.length > 0 && links.length <= 2
-        ? links.map((u) => <Preview key={u} url={u} />)
+        ? links.map((u) => <Preview key={u} url={u} many={links.length > 1} />)
         : links.length > 2 && (
             <div className="sources">
               <span className="sources-label">Джерела · {total}</span>
