@@ -16,11 +16,17 @@ function syncViewport() {
   root.style.setProperty('--app-h', `${vv ? vv.height : window.innerHeight}px`)
   root.style.setProperty('--app-top', `${vv ? Math.max(0, vv.offsetTop) : 0}px`)
   // Клавіатура на iPhone зменшує лише visualViewport: так і впізнаємо, що вона відкрита.
-  root.classList.toggle('kb-open', Boolean(vv && window.innerHeight - vv.height > 120))
+  const kbOpen = Boolean(vv && window.innerHeight - vv.height > 120)
+  root.classList.toggle('kb-open', kbOpen)
+  // Застосунок закріплений (position: fixed) і сам не прокручується. Але після системного вікна (вибір фото)
+  // Safari лишає сторінку трохи прокрученою: малює все на місці, а дотики рахує зі зсувом на цю прокрутку,
+  // і натискання влучає нижче, ніж торкнувся палець. Без клавіатури прокрутки бути не може — скидаємо.
+  if (!kbOpen && (window.scrollY !== 0 || window.scrollX !== 0)) window.scrollTo(0, 0)
 }
 vv?.addEventListener('resize', syncViewport)
 vv?.addEventListener('scroll', syncViewport)
 window.addEventListener('resize', syncViewport)
+window.addEventListener('scroll', syncViewport, { passive: true })
 syncViewport()
 // Поки відкрите системне вікно (вибір фото, камера), iPhone ховає клавіатуру, але resize не завжди доходить,
 // і застосунок лишався б висотою «з клавіатурою». Звіряємось, коли до сторінки повертаються, ще й із затримкою:
