@@ -22,6 +22,19 @@ vv?.addEventListener('resize', syncViewport)
 vv?.addEventListener('scroll', syncViewport)
 window.addEventListener('resize', syncViewport)
 syncViewport()
+// Поки відкрите системне вікно (вибір фото, камера), iPhone ховає клавіатуру, але resize не завжди доходить,
+// і застосунок лишався б висотою «з клавіатурою». Звіряємось, коли до сторінки повертаються, ще й із затримкою:
+// visualViewport оновлюється після анімації клавіатури.
+function resyncSoon() {
+  syncViewport()
+  setTimeout(syncViewport, 300)
+  setTimeout(syncViewport, 800)
+}
+window.addEventListener('focus', resyncSoon)
+window.addEventListener('pageshow', resyncSoon)
+document.addEventListener('visibilitychange', resyncSoon)
+document.addEventListener('focusout', resyncSoon)
+document.addEventListener('change', (e) => (e.target as HTMLInputElement | null)?.type === 'file' && resyncSoon(), true)
 
 // /s/<токен> — спільний чат лише для перегляду: без входу, пушів і сервіс-воркера.
 const shareToken = /^\/s\/([\w-]{20,})\/?$/.exec(location.pathname)?.[1]

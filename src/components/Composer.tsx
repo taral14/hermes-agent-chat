@@ -363,7 +363,12 @@ export function Composer({ ref, running, answering, onSend, onStop, onSteer, onB
             if (document.activeElement === area.current && (e.target as Element).closest('button')) e.preventDefault()
           }}
         >
-          <button type="button" className="icon-btn round" title="Прикріпити файл" aria-label="Прикріпити файл" onClick={() => picker.current?.click()}>
+          <button type="button" className="icon-btn round" title="Прикріпити файл" aria-label="Прикріпити файл" onClick={() => {
+              // Вибір фото на iPhone ховає клавіатуру, а поле лишалося б у фокусі без неї: стартовий екран
+              // тримав би поле внизу, ніби клавіатура ще відкрита. Знімаємо фокус самі.
+              area.current?.blur()
+              picker.current?.click()
+            }}>
             <Paperclip size={18} />
           </button>
           <input
